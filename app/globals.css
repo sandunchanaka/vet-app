@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+/* Custom styles for NetStripes theme */
+.netstripes-gradient {
+  background: linear-gradient(135deg, #20B2AA 0%, #2C3E50 100%);
+}
+
+.netstripes-card {
+  background: rgba(44, 62, 80, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.netstripes-input {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.netstripes-input::placeholder {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.netstripes-input:focus {
+  outline: none;
+  border-color: #20B2AA;
+  box-shadow: 0 0 0 2px rgba(32, 178, 170, 0.2);
+}
+
+.netstripes-button {
+  background: linear-gradient(135deg, #20B2AA 0%, #17A2B8 100%);
+  transition: all 0.3s ease;
+}
+
+.netstripes-button:hover {
+  background: linear-gradient(135deg, #17A2B8 0%, #20B2AA 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(32, 178, 170, 0.3);
+}
+
+.netstripes-button-secondary {
+  background: transparent;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  transition: all 0.3s ease;
+}
+
+.netstripes-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #20B2AA;
+}
+

@@ -1,0 +1,206 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model UserType {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users User[]
+
+  @@map("user_types")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  firstName         String    @db.VarChar(50)
+  lastName          String    @db.VarChar(50)
+  email             String    @unique @db.VarChar(100)
+  phoneNumber       String?   @db.VarChar(20)
+  passwordHash      String    @db.VarChar(255)
+  userTypeId        Int
+  isActive          Boolean   @default(true)
+  lastLoginAt       DateTime?
+  loginCount        Int       @default(0)
+  passwordChangedAt DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  deletedAt         DateTime?
+
+  // Relations
+  userType   UserType @relation(fields: [userTypeId], references: [id])
+  createdBy  User?    @relation("UserCreatedBy", fields: [createdById], references: [id])
+  updatedBy  User?    @relation("UserUpdatedBy", fields: [updatedById], references: [id])
+  createdById String?
+  updatedById String?
+
+  // Self-referential relations
+  createdUsers User[] @relation("UserCreatedBy")
+  updatedUsers User[] @relation("UserUpdatedBy")
+
+  // Other relations
+  patients        Patient[]
+  appointments    Appointment[]
+  medicalRecords  MedicalRecord[]
+  prescriptions   Prescription[]
+
+  @@map("users")
+}
+
+model Patient {
+  id          String    @id @default(uuid())
+  name        String    @db.VarChar(100)
+  species     String    @db.VarChar(50)
+  breed       String?   @db.VarChar(50)
+  age         Int?
+  weight      Float?
+  color       String?   @db.VarChar(50)
+  microchipId String?   @unique @db.VarChar(50)
+  ownerName   String    @db.VarChar(100)
+  ownerPhone  String?   @db.VarChar(20)
+  ownerEmail  String?   @db.VarChar(100)
+  address     String?   @db.Text
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  // Relations
+  ownerId String
+  owner    User   @relation(fields: [ownerId], references: [id])
+
+  appointments   Appointment[]
+  medicalRecords MedicalRecord[]
+  prescriptions  Prescription[]
+
+  @@map("patients")
+}
+
+model Appointment {
+  id          String    @id @default(uuid())
+  patientId   String
+  veterinarianId String
+  date        DateTime
+  time        String    @db.VarChar(10)
+  duration    Int       @default(30) // minutes
+  type        String    @db.VarChar(50)
+  status      String    @default("scheduled") @db.VarChar(20)
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  patient     Patient @relation(fields: [patientId], references: [id])
+  veterinarian User   @relation(fields: [veterinarianId], references: [id])
+
+  @@map("appointments")
+}
+
+model MedicalRecord {
+  id          String    @id @default(uuid())
+  patientId   String
+  veterinarianId String
+  date        DateTime
+  diagnosis   String    @db.Text
+  treatment   String?   @db.Text
+  notes       String?   @db.Text
+  weight      Float?
+  temperature Float?
+  heartRate   Int?
+  bloodPressure String? @db.VarChar(20)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  patient     Patient @relation(fields: [patientId], references: [id])
+  veterinarian User   @relation(fields: [veterinarianId], references: [id])
+
+  prescriptions Prescription[]
+
+  @@map("medical_records")
+}
+
+model Prescription {
+  id              String    @id @default(uuid())
+  medicalRecordId String
+  patientId       String
+  medication      String    @db.VarChar(100)
+  dosage          String    @db.VarChar(50)
+  frequency       String    @db.VarChar(50)
+  duration        String    @db.VarChar(50)
+  instructions    String?   @db.Text
+  prescribedAt    DateTime  @default(now())
+  isActive        Boolean   @default(true)
+
+  // Relations
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+  patient      Patient       @relation(fields: [patientId], references: [id])
+
+  @@map("prescriptions")
+}
+
+model Inventory {
+  id          String    @id @default(uuid())
+  name        String    @db.VarChar(100)
+  category    String    @db.VarChar(50)
+  description String?   @db.Text
+  sku         String    @unique @db.VarChar(50)
+  unitPrice   Decimal   @db.Decimal(10, 2)
+  quantity    Int       @default(0)
+  minQuantity Int       @default(0)
+  supplier    String?   @db.VarChar(100)
+  expiryDate  DateTime?
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("inventory")
+}
+
+model Billing {
+  id          String    @id @default(uuid())
+  patientId   String
+  amount      Decimal   @db.Decimal(10, 2)
+  tax         Decimal   @db.Decimal(10, 2) @default(0)
+  total       Decimal   @db.Decimal(10, 2)
+  status      String    @default("pending") @db.VarChar(20)
+  dueDate     DateTime?
+  paidAt      DateTime?
+  notes       String?   @db.Text
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  billingItems BillingItem[]
+
+  @@map("billing")
+}
+
+model BillingItem {
+  id        String  @id @default(uuid())
+  billingId String
+  name      String  @db.VarChar(100)
+  quantity  Int     @default(1)
+  unitPrice Decimal @db.Decimal(10, 2)
+  total     Decimal @db.Decimal(10, 2)
+
+  // Relations
+  billing Billing @relation(fields: [billingId], references: [id])
+
+  @@map("billing_items")
+}
