@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
 
     // Insert new user
     const [result] = await pool.execute(
-      `INSERT INTO users (first_name, last_name, email, password, user_type, created_user) 
+      `INSERT INTO users (first_name, last_name, email, password_hash, user_type, created_user) 
        VALUES (?, ?, ?, ?, ?, 1)`,
       [first_name, last_name, email, hashedPassword, userType]
     );
