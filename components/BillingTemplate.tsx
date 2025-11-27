@@ -36,12 +36,13 @@ interface Drug {
 interface Service {
   id: number;
   service_name: string;
-  price: number;
+  base_price: number | string;
 }
 
 interface VaccinationType {
   id: number;
   name: string;
+  vaccine_name: string;
 }
 
 interface PrescriptionItem {
@@ -86,12 +87,18 @@ interface Dose {
 
 interface DosageType {
   id: number;
-  dosage_type_name: string;
+  name: string;
+  abbreviation: string;
 }
 
 interface DurationType {
   id: number;
-  duration_type_name: string;
+  name: string;
+}
+
+interface DurationWeek {
+  id: number;
+  name: string;
 }
 
 export default function BillingTemplate() {
@@ -106,6 +113,7 @@ export default function BillingTemplate() {
   const [doses, setDoses] = useState<Dose[]>([]);
   const [dosageTypes, setDosageTypes] = useState<DosageType[]>([]);
   const [durationTypes, setDurationTypes] = useState<DurationType[]>([]);
+  const [durationWeeks, setDurationWeeks] = useState<DurationWeek[]>([]);
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -185,7 +193,7 @@ export default function BillingTemplate() {
     try {
       setIsDataLoading(true);
       console.log('Fetching data...');
-      const [petsRes, vetsRes, drugsRes, servicesRes, vaccinationsRes, categoriesRes, breedsRes, dosesRes, dosageTypesRes, durationTypesRes] = await Promise.all([
+      const [petsRes, vetsRes, drugsRes, servicesRes, vaccinationsRes, categoriesRes, breedsRes, dosesRes, dosageTypesRes, durationTypesRes, durationWeeksRes] = await Promise.all([
         fetch('/api/pets'),
         fetch('/api/veterinarians'),
         fetch('/api/drugs'),
@@ -195,10 +203,11 @@ export default function BillingTemplate() {
         fetch('/api/pet-breeds'),
         fetch('/api/doses'),
         fetch('/api/dosage-types'),
-        fetch('/api/duration-types')
+        fetch('/api/duration-types'),
+        fetch('/api/duration-weeks')
       ]);
 
-      const [petsData, vetsData, drugsData, servicesData, vaccinationsData, categoriesData, breedsData, dosesData, dosageTypesData, durationTypesData] = await Promise.all([
+      const [petsData, vetsData, drugsData, servicesData, vaccinationsData, categoriesData, breedsData, dosesData, dosageTypesData, durationTypesData, durationWeeksData] = await Promise.all([
         petsRes.json(),
         vetsRes.json(),
         drugsRes.json(),
@@ -208,7 +217,8 @@ export default function BillingTemplate() {
         breedsRes.json(),
         dosesRes.json(),
         dosageTypesRes.json(),
-        durationTypesRes.json()
+        durationTypesRes.json(),
+        durationWeeksRes.json()
       ]);
 
       console.log('Pets response:', petsData);
@@ -233,6 +243,7 @@ export default function BillingTemplate() {
       if (dosesData.success) setDoses(dosesData.data);
       if (dosageTypesData.success) setDosageTypes(dosageTypesData.data);
       if (durationTypesData.success) setDurationTypes(durationTypesData.data);
+      if (durationWeeksData.success) setDurationWeeks(durationWeeksData.data);
     } catch (error) {
       console.error('Error fetching data:', error);
       setError('Failed to fetch data');
@@ -394,11 +405,21 @@ export default function BillingTemplate() {
 
   const handleServiceNameChange = (id: string, serviceName: string) => {
     const service = services.find(s => s.service_name === serviceName);
-    setServiceItems(serviceItems.map(item => 
-      item.id === id 
-        ? { ...item, service_name: serviceName, unit_price: service?.price || 0, total_amount: (service?.price || 0) * item.quantity }
-        : item
-    ));
+    const unitPrice = service ? Number(service.base_price) || 0 : 0;
+    
+    setServiceItems(serviceItems.map(item => {
+      if (item.id !== id) return item;
+      
+      const itemTotal = item.quantity * unitPrice;
+      const discount = (itemTotal * item.discount_percentage) / 100;
+      
+      return {
+        ...item,
+        service_name: serviceName,
+        unit_price: unitPrice,
+        total_amount: itemTotal - discount
+      };
+    }));
   };
 
   const updateServiceItem = (id: string, field: keyof ServiceItem, value: number) => {
@@ -878,8 +899,8 @@ export default function BillingTemplate() {
                     >
                       <option value="" style={{ color: '#1f2937', backgroundColor: 'white' }}>Select Dosage</option>
                       {dosageTypes.map(dosageType => (
-                        <option key={dosageType.id} value={dosageType.dosage_type_name} style={{ color: '#1f2937', backgroundColor: 'white' }}>
-                          {dosageType.dosage_type_name}
+                        <option key={dosageType.id} value={dosageType.id} style={{ color: '#1f2937', backgroundColor: 'white' }}>
+                          {dosageType.name} ( {dosageType.abbreviation})
                         </option>
                       ))}
                     </select>
@@ -896,8 +917,8 @@ export default function BillingTemplate() {
                       >
                         <option value="" style={{ color: '#1f2937', backgroundColor: 'white' }}>Select Duration</option>
                         {durationTypes.map(durationType => (
-                          <option key={durationType.id} value={durationType.duration_type_name} style={{ color: '#1f2937', backgroundColor: 'white' }}>
-                            {durationType.duration_type_name}
+                          <option key={durationType.id} value={durationType.id} style={{ color: '#1f2937', backgroundColor: 'white' }}>
+                            {durationType.name}
                           </option>
                         ))}
                       </select>
@@ -942,8 +963,8 @@ export default function BillingTemplate() {
                     >
                       <option value="" style={{ color: '#1f2937', backgroundColor: 'white' }}>Select Vaccine</option>
                       {vaccinationTypes.map(vaccine => (
-                        <option key={vaccine.id} value={vaccine.name} style={{ color: '#1f2937', backgroundColor: 'white' }}>
-                          {vaccine.name}
+                        <option key={vaccine.id} value={vaccine.id} style={{ color: '#1f2937', backgroundColor: 'white' }}>
+                          {vaccine.vaccine_name}
                         </option>
                       ))}
                     </select>
@@ -964,17 +985,25 @@ export default function BillingTemplate() {
                     </div>
                   </div>
 
-                  <div className="flex items-end space-x-2">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Duration Slots</label>
-                      <input
-                        type="text"
+                    <div className="flex items-end space-x-2">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Duration Slots</label>
+                      <select
                         value={vaccination.duration_slots}
                         onChange={(e) => updateVaccination(vaccination.id, 'duration_slots', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
-                        placeholder="e.g., 3 months"
-                      />
-                    </div>
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white"
+                        disabled={durationWeeks.length === 0}
+                      >
+                        <option value="">
+                          {durationWeeks.length === 0 ? 'No duration options available' : 'Select duration'}
+                        </option>
+                        {durationWeeks.map((duration) => (
+                          <option key={duration.id} value={duration.name}>
+                            {duration.name}
+                          </option>
+                        ))}
+                      </select>
+                      </div>
                     {vaccinations.length > 1 && (
                       <button
                         type="button"
