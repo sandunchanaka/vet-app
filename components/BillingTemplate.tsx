@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface Pet {
   pet_id: number;
@@ -19,6 +20,7 @@ interface Pet {
   owner_address: string;
   owner_nic: string;
   owner_email: string;
+  owner_id?: number;
 }
 
 interface Veterinarian {
@@ -101,7 +103,24 @@ interface DurationWeek {
   name: string;
 }
 
-export default function BillingTemplate() {
+interface BillingTemplateProps {
+  mode?: 'create' | 'edit';
+  billId?: string;
+  onSuccessRedirect?: string;
+}
+
+const QUICK_TREATMENT_OFFSETS = [
+  { label: '1W', days: 7, description: '1 Week' },
+  { label: '2W', days: 14, description: '2 Weeks' },
+  { label: '3W', days: 21, description: '3 Weeks' },
+  { label: '4W', days: 28, description: '4 Weeks' },
+  { label: '1Y', days: 365, description: '1 Year' }
+];
+
+export default function BillingTemplate(props: BillingTemplateProps = {}) {
+  const { mode = 'create', billId, onSuccessRedirect } = props;
+  const isEditMode = mode === 'edit';
+  const router = useRouter();
   const [pets, setPets] = useState<Pet[]>([]);
   const [veterinarians, setVeterinarians] = useState<Veterinarian[]>([]);
   const [drugs, setDrugs] = useState<Drug[]>([]);
@@ -147,6 +166,7 @@ export default function BillingTemplate() {
     owner_nic: '',
     owner_email: ''
   });
+  const [selectedOwnerId, setSelectedOwnerId] = useState<number | null>(null);
   
   // Treatment information
   const [historyComplaint, setHistoryComplaint] = useState('');
@@ -171,7 +191,11 @@ export default function BillingTemplate() {
   // Billing calculations
   const [netTotal, setNetTotal] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountInputValue, setDiscountInputValue] = useState('0');
   const [grandTotal, setGrandTotal] = useState(0);
+  const [isEditPrefillLoading, setIsEditPrefillLoading] = useState(isEditMode);
+  const [hasLoadedEditData, setHasLoadedEditData] = useState(false);
+  const [currentBillNumber, setCurrentBillNumber] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -179,7 +203,7 @@ export default function BillingTemplate() {
 
   useEffect(() => {
     calculateTotals();
-  }, [serviceItems]);
+  }, [serviceItems, discountAmount]);
 
   useEffect(() => {
     console.log('petInfo updated:', petInfo);
@@ -260,29 +284,23 @@ export default function BillingTemplate() {
     }, 0);
     
     setNetTotal(total);
-    setDiscountAmount(serviceItems.reduce((sum, item) => {
-      const itemTotal = item.quantity * item.unit_price;
-      return sum + (itemTotal * item.discount_percentage) / 100;
-    }, 0));
-    setGrandTotal(total);
+    const effectiveDiscount = Number.isFinite(discountAmount) ? Math.max(discountAmount, 0) : 0;
+    setGrandTotal(Math.max(total - effectiveDiscount, 0));
   };
 
-  const handlePetChange = (petId: string) => {
-    const pet = pets.find(p => p.pet_id.toString() === petId);
-    setSelectedPet(pet || null);
-    
+  const normalizeDateForInput = (value?: string | null) => {
+    if (!value) return '';
+    return value.split('T')[0];
+  };
+
+  const populatePetDetails = useCallback((pet: Pet | null) => {
+    setSelectedPet(pet);
+
     if (pet) {
-      console.log('Selected pet:', pet);
-      console.log('Pet date_of_birth:', pet.date_of_birth);
-      
-      // Find the category ID for the pet's category
+      setSelectedOwnerId(pet.owner_id ?? null);
       const category = categories.find(c => c.category_name === pet.category_name);
-      
-      // Format date for HTML date input (YYYY-MM-DD)
-      const formattedDate = pet.date_of_birth ? new Date(pet.date_of_birth).toISOString().split('T')[0] : '';
-      console.log('Formatted date:', formattedDate);
-      
-      // Populate pet information for editing
+      const formattedDate = pet.date_of_birth ? normalizeDateForInput(pet.date_of_birth) : '';
+
       setPetInfo({
         name: pet.name || '',
         date_of_birth: formattedDate,
@@ -295,16 +313,14 @@ export default function BillingTemplate() {
         color: pet.color || '',
         remarks: pet.remarks || ''
       });
-      
-      // Filter breeds based on pet's category
+
       if (category) {
         const filtered = breeds.filter(b => b.category_id === category.id);
         setFilteredBreeds(filtered);
       } else {
         setFilteredBreeds(breeds);
       }
-      
-      // Populate owner information for editing
+
       setOwnerInfo({
         owner_name: pet.owner_name || '',
         owner_phone: pet.owner_phone || '',
@@ -313,7 +329,7 @@ export default function BillingTemplate() {
         owner_email: pet.owner_email || ''
       });
     } else {
-      // Clear fields if no pet selected
+      setSelectedOwnerId(null);
       setPetInfo({
         name: '',
         date_of_birth: '',
@@ -335,10 +351,151 @@ export default function BillingTemplate() {
         owner_email: ''
       });
       
-      // Reset breeds filter
       setFilteredBreeds(breeds);
     }
+  }, [breeds, categories]);
+
+  const handleDiscountInputChange = (value: string) => {
+    setDiscountInputValue(value);
+
+    if (value === '' || value === '.') {
+      setDiscountAmount(0);
+      return;
+    }
+
+    const parsedValue = parseFloat(value);
+    if (isNaN(parsedValue)) {
+      return;
+    }
+
+    setDiscountAmount(Math.max(parsedValue, 0));
   };
+
+  const handlePetChange = (petId: string) => {
+    const pet = pets.find(p => p.pet_id.toString() === petId);
+    populatePetDetails(pet || null);
+  };
+
+  useEffect(() => {
+    if (!isEditMode) {
+      if (isEditPrefillLoading) {
+        setIsEditPrefillLoading(false);
+      }
+      return;
+    }
+
+    if (!billId) {
+      setIsEditPrefillLoading(false);
+      return;
+    }
+
+    if (isDataLoading || hasLoadedEditData) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadBillForEdit = async () => {
+      setIsEditPrefillLoading(true);
+      try {
+        const response = await fetch(`/api/bills/${billId}`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch bill details');
+        }
+        const result = await response.json();
+        if (!result.success || !result.data) {
+          throw new Error(result.message || 'Bill data unavailable');
+        }
+
+        if (isCancelled) return;
+
+        const billData = result.data;
+        setCurrentBillNumber(billData.bill_number || '');
+
+        const pet = pets.find(p => p.pet_id === billData.pet_id);
+        populatePetDetails(pet || null);
+
+        setSelectedOwnerId(billData.owner_id || null);
+        setOwnerInfo(prev => ({
+          ...prev,
+          owner_name: billData.owner_name || prev.owner_name || '',
+          owner_phone: billData.owner_phone || prev.owner_phone || '',
+          owner_address: billData.owner_address || prev.owner_address || '',
+          owner_nic: billData.owner_nic || prev.owner_nic || '',
+          owner_email: billData.owner_email || prev.owner_email || ''
+        }));
+
+        setSelectedVeterinarian(billData.veterinarian_id?.toString() || '');
+        setBillingDate(normalizeDateForInput(billData.billing_date) || new Date().toISOString().split('T')[0]);
+        setNextTreatmentDate(normalizeDateForInput(billData.next_treatment_date) || new Date().toISOString().split('T')[0]);
+        setHistoryComplaint(billData.history_complaint || '');
+        setClinicalObservation(billData.clinical_observation || '');
+        setTreatmentRemarks(billData.treatment_remarks || '');
+
+        setServiceItems(
+          (billData.services && billData.services.length
+            ? billData.services
+            : [{ service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }]
+          ).map((service: any, index: number) => ({
+            id: (index + 1).toString(),
+            service_name: service.service_name || '',
+            quantity: Number(service.quantity) || 1,
+            unit_price: Number(service.unit_price) || 0,
+            discount_percentage: Number(service.discount_percentage) || 0,
+            total_amount: Number(service.total_amount) || 0
+          }))
+        );
+
+        setPrescriptions(
+          (billData.prescriptions && billData.prescriptions.length
+            ? billData.prescriptions
+            : [{ drug_name: '', dose: '', dosage: '', duration: '' }]
+          ).map((prescription: any, index: number) => ({
+            id: (index + 1).toString(),
+            drug_name: prescription.drug_name || '',
+            dose: prescription.dose || '',
+            dosage: prescription.dosage?.toString() || '',
+            duration: prescription.duration?.toString() || ''
+          }))
+        );
+
+        setVaccinations(
+          (billData.vaccinations && billData.vaccinations.length
+            ? billData.vaccinations
+            : [{ vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]
+          ).map((vaccination: any, index: number) => ({
+            id: (index + 1).toString(),
+            vaccine_name: vaccination.vaccine_name || '',
+            next_vaccination_date: vaccination.next_vaccination_date ? normalizeDateForInput(vaccination.next_vaccination_date) : '',
+            duration_slots: vaccination.duration_slots || ''
+          }))
+        );
+
+        const discountValue = Number(billData.discount_amount) || 0;
+        setDiscountAmount(discountValue);
+        setDiscountInputValue(discountValue.toString());
+        setNetTotal(Number(billData.net_total) || 0);
+        setGrandTotal(Number(billData.grand_total) || 0);
+
+        setHasLoadedEditData(true);
+      } catch (err) {
+        console.error('Failed to load bill for editing:', err);
+        if (!isCancelled) {
+          setError('Failed to load bill details for editing');
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsEditPrefillLoading(false);
+        }
+      }
+    };
+
+    loadBillForEdit();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isEditMode, billId, isDataLoading, hasLoadedEditData, pets, populatePetDetails]);
 
   const handleCategoryChange = (categoryId: string) => {
     const category = categories.find(c => c.id.toString() === categoryId);
@@ -437,6 +594,17 @@ export default function BillingTemplate() {
     }));
   };
 
+  const handleQuickTreatmentDate = (daysFromToday: number) => {
+    const calculatedDate = new Date();
+    calculatedDate.setDate(calculatedDate.getDate() + daysFromToday);
+    setNextTreatmentDate(calculatedDate.toISOString().split('T')[0]);
+  };
+
+  const handleCancel = () => {
+    const target = onSuccessRedirect || '/dashboard?tab=list-bills';
+    router.push(target);
+  };
+
   const handleSave = async () => {
     if (!selectedPet) {
       setError('Please select a pet');
@@ -448,18 +616,42 @@ export default function BillingTemplate() {
       return;
     }
 
+    if (!selectedPet?.pet_id) {
+      setError('Selected pet is invalid');
+      return;
+    }
+
+    const ownerIdForBill = selectedOwnerId ?? selectedPet?.owner_id ?? null;
+    if (!ownerIdForBill) {
+      setError('Owner information is missing for this pet');
+      return;
+    }
+
+    if (isEditMode && !billId) {
+      setError('Bill identifier missing. Please reload and try again.');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
     
     try {
-      // Generate bill number
-      const billNumber = `BILL-${Date.now()}`;
+      const billNumberValue = isEditMode
+        ? currentBillNumber || ''
+        : `BILL-${Date.now()}`;
+
+      if (!billNumberValue) {
+        throw new Error('Unable to determine bill number');
+      }
+
+      const endpoint = isEditMode && billId ? `/api/bills/${billId}` : '/api/bills';
+      const method = isEditMode && billId ? 'PUT' : 'POST';
       
       const billData = {
-        bill_number: billNumber,
+        bill_number: billNumberValue,
         pet_id: selectedPet?.pet_id,
         veterinarian_id: selectedVeterinarian,
-        owner_id: selectedPet?.owner_id,
+        owner_id: ownerIdForBill,
         billing_date: billingDate,
         next_treatment_date: nextTreatmentDate,
         history_complaint: historyComplaint,
@@ -476,8 +668,8 @@ export default function BillingTemplate() {
         owner_info: ownerInfo
       };
 
-      const response = await fetch('/api/bills', {
-        method: 'POST',
+      const response = await fetch(endpoint, {
+        method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(billData)
       });
@@ -485,36 +677,50 @@ export default function BillingTemplate() {
       const result = await response.json();
       
       if (result.success) {
-        setSuccess('Bill created successfully!');
-        // Reset form
-        setSelectedPet(null);
-        setSelectedVeterinarian('');
-        setHistoryComplaint('');
-        setClinicalObservation('');
-        setTreatmentRemarks('');
-        setPrescriptions([{ id: '1', drug_name: '', dose: '', dosage: '', duration: '' }]);
-        setVaccinations([{ id: '1', vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]);
-        setServiceItems([{ id: '1', service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }]);
-        // Reset pet and owner info
-        setPetInfo({
-          name: '',
-          date_of_birth: '',
-          age_months: '',
-          category_id: '',
-          category_name: '',
-          breed_name: '',
-          gender: '',
-          weight: '',
-          color: '',
-          remarks: ''
-        });
-        setOwnerInfo({
-          owner_name: '',
-          owner_phone: '',
-          owner_address: '',
-          owner_nic: '',
-          owner_email: ''
-        });
+        setSuccess(isEditMode ? 'Bill updated successfully!' : 'Bill created successfully!');
+        if (isEditMode) {
+          if (onSuccessRedirect) {
+            router.push(onSuccessRedirect);
+          }
+        } else {
+          // Reset form
+          setSelectedPet(null);
+          setSelectedOwnerId(null);
+          setCurrentBillNumber('');
+          setSelectedVeterinarian('');
+          setHistoryComplaint('');
+          setClinicalObservation('');
+          setTreatmentRemarks('');
+          setPrescriptions([{ id: '1', drug_name: '', dose: '', dosage: '', duration: '' }]);
+          setVaccinations([{ id: '1', vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]);
+          setServiceItems([{ id: '1', service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }]);
+          setDiscountAmount(0);
+          setDiscountInputValue('0');
+          setNetTotal(0);
+          setGrandTotal(0);
+          setBillingDate(new Date().toISOString().split('T')[0]);
+          setNextTreatmentDate(new Date().toISOString().split('T')[0]);
+          // Reset pet and owner info
+          setPetInfo({
+            name: '',
+            date_of_birth: '',
+            age_months: '',
+            category_id: '',
+            category_name: '',
+            breed_name: '',
+            gender: '',
+            weight: '',
+            color: '',
+            remarks: ''
+          });
+          setOwnerInfo({
+            owner_name: '',
+            owner_phone: '',
+            owner_address: '',
+            owner_nic: '',
+            owner_email: ''
+          });
+        }
       } else {
         setError(result.message);
       }
@@ -525,13 +731,29 @@ export default function BillingTemplate() {
     }
   };
 
+  if (isEditMode && isEditPrefillLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-pulse text-lg font-semibold text-gray-700">Loading bill details...</div>
+          <p className="text-gray-500 mt-2">Please wait while we prepare the form.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const headerTitle = isEditMode ? 'Edit Bill' : 'New Bill';
+  const headerSubtitle = isEditMode
+    ? 'Update the billing record with the latest treatment details'
+    : 'Create a new billing record for pet treatment';
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">New Bill</h1>
-          <p className="mt-2 text-gray-600">Create a new billing record for pet treatment</p>
+          <h1 className="text-3xl font-bold text-gray-900">{headerTitle}</h1>
+          <p className="mt-2 text-gray-600">{headerSubtitle}</p>
         </div>
 
         {/* Error/Success Messages */}
@@ -963,7 +1185,7 @@ export default function BillingTemplate() {
                     >
                       <option value="" style={{ color: '#1f2937', backgroundColor: 'white' }}>Select Vaccine</option>
                       {vaccinationTypes.map(vaccine => (
-                        <option key={vaccine.id} value={vaccine.id} style={{ color: '#1f2937', backgroundColor: 'white' }}>
+                        <option key={vaccine.id} value={vaccine.vaccine_name} style={{ color: '#1f2937', backgroundColor: 'white' }}>
                           {vaccine.vaccine_name}
                         </option>
                       ))}
@@ -1019,7 +1241,61 @@ export default function BillingTemplate() {
             </div>
           </div>
 
-          {/* Service Items Section */}
+          {/* Next Treatment & Billing Dates */}
+          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div className="bg-green-600 px-6 py-3">
+              <h2 className="text-lg font-semibold text-white">Next Treatment & Billing Dates</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Next Treatment Date</label>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_TREATMENT_OFFSETS.map((option) => (
+                      <button
+                        key={option.label}
+                        type="button"
+                        onClick={() => handleQuickTreatmentDate(option.days)}
+                        className="px-3 py-1 text-sm border border-green-500 text-green-700 rounded-md hover:bg-green-50 focus:outline-none focus:ring-2 focus:ring-green-500"
+                        title={option.description}
+                        aria-label={`Set next treatment date to ${option.description}`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative flex-1 min-w-[200px]">
+                    <input
+                      type="date"
+                      value={nextTreatmentDate}
+                      onChange={(e) => setNextTreatmentDate(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 pr-10"
+                    />
+                    <svg className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Billing Date</label>
+                <div className="relative w-full">
+                  <input
+                    type="date"
+                    value={billingDate}
+                    onChange={(e) => setBillingDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 pr-10"
+                  />
+                  <svg className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+
+           {/* Service Items Section */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="bg-green-600 px-6 py-3 flex justify-between items-center">
               <h2 className="text-lg font-semibold text-white">Service Items</h2>
@@ -1113,44 +1389,6 @@ export default function BillingTemplate() {
             </div>
           </div>
 
-          {/* Next Treatment & Billing Dates */}
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-            <div className="bg-green-600 px-6 py-3">
-              <h2 className="text-lg font-semibold text-white">Next Treatment & Billing Dates</h2>
-            </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Next Treatment Date</label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={nextTreatmentDate}
-                    onChange={(e) => setNextTreatmentDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 pr-10"
-                  />
-                  <svg className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Billing Date</label>
-                <div className="relative">
-                  <input
-                    type="date"
-                    value={billingDate}
-                    onChange={(e) => setBillingDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 pr-10"
-                  />
-                  <svg className="absolute right-3 top-2.5 h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Billing Information */}
           <div className="bg-white rounded-lg shadow-lg overflow-hidden">
             <div className="bg-green-600 px-6 py-3">
@@ -1173,10 +1411,11 @@ export default function BillingTemplate() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Discount Amount</label>
                   <input
                     type="number"
-                    value={discountAmount}
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900"
+                    min="0"
                     step="0.01"
+                    value={discountInputValue}
+                    onChange={(e) => handleDiscountInputChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
                   />
                 </div>
 
@@ -1198,6 +1437,7 @@ export default function BillingTemplate() {
           <div className="flex justify-end space-x-4">
             <button
               type="button"
+              onClick={handleCancel}
               className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
             >
               Cancel
@@ -1208,7 +1448,7 @@ export default function BillingTemplate() {
               disabled={isLoading}
               className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Saving...' : 'Save Bill'}
+              {isLoading ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update Bill' : 'Save Bill')}
             </button>
           </div>
         </div>

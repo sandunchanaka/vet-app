@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { User } from '@/types/user';
 import UserManagement from '@/components/UserManagement';
 import UserTypeManagement from '@/components/UserTypeManagement';
@@ -15,13 +15,16 @@ import VeterinariansManagement from '@/components/VeterinariansManagement';
 import PetSearch from '@/components/PetSearch';
 import DosageMasterManagement from '@/components/DosageMasterManagement';
 import BillingTemplate from '@/components/BillingTemplate';
+import BillsList from '@/components/BillsList';
 import Sidebar from '@/components/Sidebar';
 
 export default function Dashboard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const billIdParam = searchParams.get('billId');
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'dashboard');
 
   useEffect(() => {
     // Check if user is authenticated
@@ -43,6 +46,24 @@ export default function Dashboard() {
       setIsLoading(false);
     }
   }, [router]);
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [searchParams, activeTab]);
+
+  const handleTabChange = (tab: string) => {
+    if (tab === activeTab) return;
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('tab', tab);
+    if (tab !== 'edit-bill') {
+      params.delete('billId');
+    }
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('auth_token');
@@ -71,7 +92,7 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} user={user} />
+      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} user={user} />
       
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -287,11 +308,19 @@ export default function Dashboard() {
             <BillingTemplate />
           )}
 
+          {activeTab === 'edit-bill' && (
+            billIdParam ? (
+              <BillingTemplate mode="edit" billId={billIdParam} onSuccessRedirect="/dashboard?tab=list-bills" />
+            ) : (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Select a Bill to Edit</h2>
+                <p className="text-gray-600">No bill was specified. Please return to the bill list and choose Edit on the desired record.</p>
+              </div>
+            )
+          )}
+
           {activeTab === 'list-bills' && (
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Bills List</h2>
-              <p className="text-gray-600">Bill listing and management features coming soon...</p>
-            </div>
+            <BillsList />
           )}
 
           {activeTab === 'patients' && (
