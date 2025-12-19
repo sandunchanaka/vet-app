@@ -193,7 +193,7 @@ export default function VaccinationTypesManagement() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Vaccination Types</h2>
+          <h2 className="text-2xl font-bold text-gray-900">Vaccinations</h2>
           <p className="text-gray-600">Manage vaccination types and schedules</p>
         </div>
         <button
@@ -203,7 +203,7 @@ export default function VaccinationTypesManagement() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
           </svg>
-          <span>Add Vaccination Type</span>
+          <span>Add vaccinations</span>
         </button>
       </div>
 

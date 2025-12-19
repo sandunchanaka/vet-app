@@ -61,7 +61,7 @@ interface BillDetail extends Bill {
   vaccinations: BillVaccination[];
 }
 
-type BillAction = 'view' | 'edit' | 'print' | 'delete';
+type BillAction = 'view' | 'edit' | 'print' | 'prescription' | 'delete';
 
 interface ApiResponse {
   success: boolean;
@@ -206,6 +206,23 @@ export default function BillsList() {
     router.push('/dashboard?tab=new-bill');
   };
 
+  const handlePrintBill = (billId: number) => {
+    if (typeof window !== 'undefined') {
+      const url = `/billing/print/${billId}`;
+      window.open(url, '_blank');
+    } else {
+      router.push(`/billing/print/${billId}`);
+    }
+  };
+
+  const handlePrintPrescription = (billId: number) => {
+    if (typeof window !== 'undefined') {
+      window.open(`/billing/prescription/${billId}`, '_blank');
+    } else {
+      router.push(`/billing/prescription/${billId}`);
+    }
+  };
+
   const handleBillAction = (action: BillAction, bill: Bill) => {
     if (action === 'view') {
       fetchBillDetails(bill.bill_id);
@@ -214,6 +231,16 @@ export default function BillsList() {
 
     if (action === 'edit') {
       router.push(`/dashboard?tab=edit-bill&billId=${bill.bill_id}`);
+      return;
+    }
+
+    if (action === 'print') {
+      handlePrintBill(bill.bill_id);
+      return;
+    }
+
+    if (action === 'prescription') {
+      handlePrintPrescription(bill.bill_id);
       return;
     }
 
@@ -334,6 +361,17 @@ export default function BillsList() {
       )
     },
     {
+      label: 'Prescription',
+      action: 'prescription' as BillAction,
+      color: 'bg-purple-100 text-purple-700 hover:bg-purple-200',
+      icon: (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" />
+          <path strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M9 8h6M9 12h6M9 16h3" />
+        </svg>
+      )
+    },
+    {
       label: 'Delete',
       action: 'delete' as BillAction,
       color: 'bg-red-100 text-red-700 hover:bg-red-200',
@@ -444,6 +482,7 @@ export default function BillsList() {
                     <div className="flex items-center gap-2">
                       {actionButtons.map((button) => {
                         const isDeleteAction = button.action === 'delete';
+                        const isPrintAction = button.action === 'print';
                         const isDisabled = isDeleteAction && deletingBillId === bill.bill_id;
                         return (
                           <button
