@@ -16,6 +16,7 @@ import PetSearch from '@/components/PetSearch';
 import DosageMasterManagement from '@/components/DosageMasterManagement';
 import BillingTemplate from '@/components/BillingTemplate';
 import BillsList from '@/components/BillsList';
+import BillingSearch from '@/components/BillingSearch';
 import Sidebar from '@/components/Sidebar';
 
 export default function Dashboard() {
@@ -321,6 +322,10 @@ export default function Dashboard() {
 
           {activeTab === 'list-bills' && (
             <BillsList />
+          )}
+
+          {activeTab === 'billing-search' && (
+            <BillingSearch />
           )}
 
           {activeTab === 'patients' && (

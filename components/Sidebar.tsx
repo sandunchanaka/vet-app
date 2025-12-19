@@ -152,6 +152,15 @@ export default function Sidebar({ activeTab, onTabChange, user }: SidebarProps) 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           )
+        },
+        {
+          id: 'billing-search',
+          name: 'Billing Search',
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6a6 6 0 016 6m-6-6a6 6 0 00-6 6m6-6V4m0 2a6 6 0 016 6m-6 0v2m0-2a6 6 0 00-6-6m12 6h2m-2 0a6 6 0 01-6 6m0 0H8" />
+            </svg>
+          )
         }
       ]
     },
