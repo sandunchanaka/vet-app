@@ -44,7 +44,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       frequency_months, 
       description, 
       side_effects, 
-      contraindications 
+      contraindications,
+      price
     } = await request.json();
 
     if (!vaccine_name) {
@@ -53,6 +54,8 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         message: 'Vaccine name is required'
       }, { status: 400 });
     }
+
+    const parsedPrice = price === undefined || price === '' ? null : (Number(price) || null);
 
     connection = await pool.getConnection();
 
@@ -86,7 +89,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     await connection.execute(
       `UPDATE vaccination_types 
        SET vaccine_name = ?, vaccine_type = ?, target_species = ?, age_requirement_months = ?, 
-           frequency_months = ?, description = ?, side_effects = ?, contraindications = ?, 
+           frequency_months = ?, description = ?, side_effects = ?, contraindications = ?, price = ?, 
            updated_by = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
@@ -98,6 +101,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         description || null, 
         side_effects || null, 
         contraindications || null, 
+        parsedPrice, 
         1, 
         params.id
       ]

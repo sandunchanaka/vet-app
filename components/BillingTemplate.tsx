@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCurrency } from '@/context/CurrencyContext';
 
 interface Pet {
   pet_id: number;
@@ -45,6 +46,7 @@ interface VaccinationType {
   id: number;
   name: string;
   vaccine_name: string;
+   price?: number | string | null;
 }
 
 interface PrescriptionItem {
@@ -121,6 +123,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
   const { mode = 'create', billId, onSuccessRedirect } = props;
   const isEditMode = mode === 'edit';
   const router = useRouter();
+  const { currencySymbol } = useCurrency();
   const [pets, setPets] = useState<Pet[]>([]);
   const [veterinarians, setVeterinarians] = useState<Veterinarian[]>([]);
   const [drugs, setDrugs] = useState<Drug[]>([]);
@@ -538,15 +541,57 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
   };
 
   const removeVaccination = (id: string) => {
+    setServiceItems(prev => {
+      const filtered = prev.filter(item => item.id !== `vaccination-${id}`);
+      if (filtered.length === 0) {
+        return [{ id: '1', service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }];
+      }
+      return filtered;
+    });
     if (vaccinations.length > 1) {
       setVaccinations(vaccinations.filter(v => v.id !== id));
     }
   };
 
   const updateVaccination = (id: string, field: keyof VaccinationItem, value: string) => {
-    setVaccinations(vaccinations.map(v => 
-      v.id === id ? { ...v, [field]: value } : v
-    ));
+    setVaccinations(prev =>
+      prev.map(v => (v.id === id ? { ...v, [field]: value } : v))
+    );
+
+    if (field === 'vaccine_name') {
+      const serviceId = `vaccination-${id}`;
+      if (!value) {
+        setServiceItems(prev => prev.filter(item => item.id !== serviceId));
+        return;
+      }
+
+      const vaccine = vaccinationTypes.find(v => v.vaccine_name === value);
+      const unitPrice = vaccine && vaccine.price !== undefined && vaccine.price !== null && !Number.isNaN(Number(vaccine.price))
+        ? Number(vaccine.price)
+        : 0;
+      const updatedItem: ServiceItem = {
+        id: serviceId,
+        service_name: 'Vaccination',
+        quantity: 1,
+        unit_price: unitPrice,
+        discount_percentage: 0,
+        total_amount: unitPrice
+      };
+
+      setServiceItems(prev => {
+        const existingIndex = prev.findIndex(item => item.id === serviceId);
+        if (existingIndex >= 0) {
+          return prev.map((item, idx) => (idx === existingIndex ? updatedItem : item));
+        }
+        const emptyIndex = prev.findIndex(item => !item.service_name);
+        if (emptyIndex >= 0) {
+          const updated = [...prev];
+          updated[emptyIndex] = updatedItem;
+          return updated;
+        }
+        return [...prev, updatedItem];
+      });
+    }
   };
 
   const addService = () => {
@@ -555,8 +600,21 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
   };
 
   const removeService = (id: string) => {
-    if (serviceItems.length > 1) {
-      setServiceItems(serviceItems.filter(s => s.id !== id));
+    setServiceItems(prev => {
+      const filtered = prev.filter(s => s.id !== id);
+      if (filtered.length === 0) {
+        return [{ id: '1', service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }];
+      }
+      return filtered;
+    });
+
+    if (id.startsWith('vaccination-')) {
+      const vaccinationId = id.replace('vaccination-', '');
+      setVaccinations(prev =>
+        prev.map(v =>
+          v.id === vaccinationId ? { ...v, vaccine_name: '' } : v
+        )
+      );
     }
   };
 
@@ -1339,7 +1397,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price ({currencySymbol})</label>
                     <input
                       type="number"
                       value={service.unit_price}
@@ -1363,7 +1421,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount ({currencySymbol})</label>
                     <input
                       type="number"
                       value={service.total_amount}
@@ -1374,7 +1432,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                   </div>
 
                   <div className="flex items-end">
-                    {serviceItems.length > 1 && (
+                    {(serviceItems.length > 1 || service.id.startsWith('vaccination-')) && (
                       <button
                         type="button"
                         onClick={() => removeService(service.id)}
@@ -1397,7 +1455,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Net Total</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Net Total ({currencySymbol})</label>
                   <input
                     type="number"
                     value={netTotal}
@@ -1408,7 +1466,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Amount</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Amount ({currencySymbol})</label>
                   <input
                     type="number"
                     min="0"
@@ -1420,7 +1478,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Grand Total</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Grand Total ({currencySymbol})</label>
                   <input
                     type="number"
                     value={grandTotal}

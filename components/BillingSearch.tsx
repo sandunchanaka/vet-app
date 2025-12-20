@@ -181,10 +181,18 @@ export default function BillingSearch() {
     const term = searchTerm.toLowerCase();
     return bills.filter((bill) => {
       const doctorName = `${bill.vet_first_name || ''} ${bill.vet_last_name || ''}`.trim().toLowerCase();
+      const ownerName = (bill as any).owner_name?.toLowerCase?.() || '';
+      const ownerPhone = (bill as any).owner_phone?.toLowerCase?.() || '';
+      const billIdStr = bill.bill_id?.toString() || '';
+      const billingDate = bill.billing_date ? new Date(bill.billing_date).toLocaleDateString().toLowerCase() : '';
       return (
         bill.bill_number?.toLowerCase().includes(term) ||
+        billIdStr.includes(term) ||
+        billingDate.includes(term) ||
         bill.pet_name?.toLowerCase().includes(term) ||
-        doctorName.includes(term)
+        doctorName.includes(term) ||
+        ownerName.includes(term) ||
+        ownerPhone.includes(term)
       );
     });
   }, [bills, searchTerm]);
