@@ -7,6 +7,14 @@ export async function GET(request: NextRequest) {
   const endDate = searchParams.get('endDate');
   const doctorId = searchParams.get('doctorId');
   const petId = searchParams.get('petId');
+  const petCategoryId = searchParams.get('petCategoryId');
+  const billId = (searchParams.get('billId') || '').trim();
+  const billIdNumber = billId ? Number(billId) : null;
+  const billNumber = (searchParams.get('billNumber') || '').trim();
+  const petName = (searchParams.get('petName') || '').trim();
+  const ownerName = (searchParams.get('ownerName') || '').trim();
+  const ownerEmail = (searchParams.get('ownerEmail') || '').trim();
+  const ownerPhone = (searchParams.get('ownerPhone') || '').trim();
 
   if (!startDate || !endDate) {
     return NextResponse.json(
@@ -32,6 +40,41 @@ export async function GET(request: NextRequest) {
       params.push(petId);
     }
 
+    if (petCategoryId && petCategoryId !== 'any') {
+      conditions.push('p.pet_category_id = ?');
+      params.push(petCategoryId);
+    }
+
+    if (billIdNumber && !Number.isNaN(billIdNumber)) {
+      conditions.push('b.bill_id = ?');
+      params.push(billIdNumber);
+    }
+
+    if (billNumber) {
+      conditions.push('b.bill_number LIKE ?');
+      params.push(`%${billNumber}%`);
+    }
+
+    if (petName) {
+      conditions.push('p.name LIKE ?');
+      params.push(`%${petName}%`);
+    }
+
+    if (ownerName) {
+      conditions.push('po.owner_name LIKE ?');
+      params.push(`%${ownerName}%`);
+    }
+
+    if (ownerEmail) {
+      conditions.push('po.email LIKE ?');
+      params.push(`%${ownerEmail}%`);
+    }
+
+    if (ownerPhone) {
+      conditions.push('po.phone LIKE ?');
+      params.push(`%${ownerPhone}%`);
+    }
+
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const [bills] = await connection.execute(
@@ -47,14 +90,18 @@ export async function GET(request: NextRequest) {
           b.pet_id,
           p.name AS pet_name,
           p.pet_code,
+          p.pet_category_id,
+          pc.category_name,
           p.owner_id,
           po.owner_name,
           po.phone AS owner_phone,
+          po.email AS owner_email,
           b.veterinarian_id,
           v.first_name AS vet_first_name,
           v.last_name AS vet_last_name
         FROM bills b
         LEFT JOIN pets p ON b.pet_id = p.pet_id
+        LEFT JOIN pet_categories pc ON p.pet_category_id = pc.id
         LEFT JOIN pet_owners po ON b.owner_id = po.owner_id
         LEFT JOIN veterinarians v ON b.veterinarian_id = v.vet_id
         ${whereClause}
@@ -70,6 +117,9 @@ export async function GET(request: NextRequest) {
           SUM(b.grand_total) AS total_amount,
           COUNT(*) AS bill_count
         FROM bills b
+        LEFT JOIN pets p ON b.pet_id = p.pet_id
+        LEFT JOIN pet_categories pc ON p.pet_category_id = pc.id
+        LEFT JOIN pet_owners po ON b.owner_id = po.owner_id
         ${whereClause}
         GROUP BY DATE(b.billing_date)
         ORDER BY billing_day ASC
@@ -85,6 +135,9 @@ export async function GET(request: NextRequest) {
           SUM(b.grand_total) AS total_amount
         FROM bills b
         LEFT JOIN veterinarians v ON b.veterinarian_id = v.vet_id
+        LEFT JOIN pets p ON b.pet_id = p.pet_id
+        LEFT JOIN pet_categories pc ON p.pet_category_id = pc.id
+        LEFT JOIN pet_owners po ON b.owner_id = po.owner_id
         ${whereClause}
         GROUP BY b.veterinarian_id, v.first_name, v.last_name
         ORDER BY total_amount DESC
