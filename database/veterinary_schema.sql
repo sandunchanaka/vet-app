@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS vaccination_types (
     target_species VARCHAR(100),
     age_requirement_months INT,
     frequency_months INT,
+    price DECIMAL(10,2) DEFAULT 0.00,
     description TEXT,
     side_effects TEXT,
     contraindications TEXT,
@@ -183,14 +184,14 @@ INSERT INTO services (service_name, service_type, description, duration_minutes,
 ('Microchipping', 'consultation', 'Pet identification microchip implantation', 15, 55.00, FALSE, TRUE, 1);
 
 -- Insert dummy data for vaccination_types
-INSERT INTO vaccination_types (vaccine_name, vaccine_type, target_species, age_requirement_months, frequency_months, description, side_effects, contraindications, created_by) VALUES
-('Rabies', 'core', 'Dogs, Cats', 3, 12, 'Core vaccine for rabies prevention', 'Mild fever, lethargy', 'Severe illness', 1),
-('DHPP', 'core', 'Dogs', 6, 12, 'Core vaccine for distemper, hepatitis, parainfluenza, and parvovirus', 'Mild fever, soreness', 'Severe illness', 1),
-('FVRCP', 'core', 'Cats', 6, 12, 'Core vaccine for feline viral rhinotracheitis, calicivirus, and panleukopenia', 'Mild fever, lethargy', 'Severe illness', 1),
-('Bordetella', 'non_core', 'Dogs', 8, 12, 'Kennel cough prevention vaccine', 'Mild respiratory symptoms', 'Severe illness', 1),
-('Lyme Disease', 'non_core', 'Dogs', 12, 12, 'Lyme disease prevention vaccine', 'Mild fever, soreness', 'Severe illness', 1),
-('Feline Leukemia', 'non_core', 'Cats', 8, 12, 'Feline leukemia virus prevention', 'Mild fever, lethargy', 'Severe illness', 1),
-('Canine Influenza', 'optional', 'Dogs', 12, 12, 'Canine influenza prevention vaccine', 'Mild respiratory symptoms', 'Severe illness', 1);
+INSERT INTO vaccination_types (vaccine_name, vaccine_type, target_species, age_requirement_months, frequency_months, price, description, side_effects, contraindications, created_by) VALUES
+('Rabies', 'core', 'Dogs, Cats', 3, 12, 55.00, 'Core vaccine for rabies prevention', 'Mild fever, lethargy', 'Severe illness', 1),
+('DHPP', 'core', 'Dogs', 6, 12, 65.00, 'Core vaccine for distemper, hepatitis, parainfluenza, and parvovirus', 'Mild fever, soreness', 'Severe illness', 1),
+('FVRCP', 'core', 'Cats', 6, 12, 60.00, 'Core vaccine for feline viral rhinotracheitis, calicivirus, and panleukopenia', 'Mild fever, lethargy', 'Severe illness', 1),
+('Bordetella', 'non_core', 'Dogs', 8, 12, 45.00, 'Kennel cough prevention vaccine', 'Mild respiratory symptoms', 'Severe illness', 1),
+('Lyme Disease', 'non_core', 'Dogs', 12, 12, 70.00, 'Lyme disease prevention vaccine', 'Mild fever, soreness', 'Severe illness', 1),
+('Feline Leukemia', 'non_core', 'Cats', 8, 12, 58.00, 'Feline leukemia virus prevention', 'Mild fever, lethargy', 'Severe illness', 1),
+('Canine Influenza', 'optional', 'Dogs', 12, 12, 52.00, 'Canine influenza prevention vaccine', 'Mild respiratory symptoms', 'Severe illness', 1);
 
 -- Insert dummy data for vaccinations (sample vaccination records)
 INSERT INTO vaccinations (patient_id, vaccine_id, veterinarian_id, vaccination_date, next_due_date, batch_number, manufacturer, administered_by, notes, created_by) VALUES

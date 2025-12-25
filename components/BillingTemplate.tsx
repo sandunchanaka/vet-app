@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCurrency } from '@/context/CurrencyContext';
 
 interface Pet {
   pet_id: number;
@@ -45,6 +46,7 @@ interface VaccinationType {
   id: number;
   name: string;
   vaccine_name: string;
+   price?: number | string | null;
 }
 
 interface PrescriptionItem {
@@ -57,6 +59,7 @@ interface PrescriptionItem {
 
 interface VaccinationItem {
   id: string;
+  vaccine_id: string;
   vaccine_name: string;
   next_vaccination_date: string;
   duration_slots: string;
@@ -121,6 +124,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
   const { mode = 'create', billId, onSuccessRedirect } = props;
   const isEditMode = mode === 'edit';
   const router = useRouter();
+  const { currencySymbol } = useCurrency();
   const [pets, setPets] = useState<Pet[]>([]);
   const [veterinarians, setVeterinarians] = useState<Veterinarian[]>([]);
   const [drugs, setDrugs] = useState<Drug[]>([]);
@@ -180,7 +184,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
 
   // Vaccination items
   const [vaccinations, setVaccinations] = useState<VaccinationItem[]>([
-    { id: '1', vaccine_name: '', next_vaccination_date: '', duration_slots: '' }
+    { id: '1', vaccine_id: '', vaccine_name: '', next_vaccination_date: '', duration_slots: '' }
   ]);
 
   // Service items
@@ -462,9 +466,13 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
         setVaccinations(
           (billData.vaccinations && billData.vaccinations.length
             ? billData.vaccinations
-            : [{ vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]
+            : [{ vaccine_name: '', next_vaccination_date: '', duration_slots: '', vaccine_id: '' }]
           ).map((vaccination: any, index: number) => ({
             id: (index + 1).toString(),
+            vaccine_id:
+              vaccination.vaccine_id?.toString() ||
+              vaccinationTypes.find(vt => vt.vaccine_name === vaccination.vaccine_name)?.id?.toString() ||
+              '',
             vaccine_name: vaccination.vaccine_name || '',
             next_vaccination_date: vaccination.next_vaccination_date ? normalizeDateForInput(vaccination.next_vaccination_date) : '',
             duration_slots: vaccination.duration_slots || ''
@@ -495,7 +503,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
     return () => {
       isCancelled = true;
     };
-  }, [isEditMode, billId, isDataLoading, hasLoadedEditData, pets, populatePetDetails]);
+  }, [isEditMode, billId, isDataLoading, hasLoadedEditData, pets, populatePetDetails, vaccinationTypes]);
 
   const handleCategoryChange = (categoryId: string) => {
     const category = categories.find(c => c.id.toString() === categoryId);
@@ -534,19 +542,79 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
 
   const addVaccination = () => {
     const newId = (vaccinations.length + 1).toString();
-    setVaccinations([...vaccinations, { id: newId, vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]);
+    setVaccinations([...vaccinations, { id: newId, vaccine_id: '', vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]);
   };
 
   const removeVaccination = (id: string) => {
+    setServiceItems(prev => {
+      const filtered = prev.filter(item => item.id !== `vaccination-${id}`);
+      if (filtered.length === 0) {
+        return [{ id: '1', service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }];
+      }
+      return filtered;
+    });
     if (vaccinations.length > 1) {
       setVaccinations(vaccinations.filter(v => v.id !== id));
     }
   };
 
   const updateVaccination = (id: string, field: keyof VaccinationItem, value: string) => {
-    setVaccinations(vaccinations.map(v => 
-      v.id === id ? { ...v, [field]: value } : v
-    ));
+    let selectedVaccine: VaccinationType | undefined;
+
+    setVaccinations(prev =>
+      prev.map(v => {
+        if (v.id !== id) return v;
+        const updated = { ...v, [field]: value };
+        if (field === 'vaccine_id') {
+          selectedVaccine = vaccinationTypes.find(vt => vt.id.toString() === value);
+          updated.vaccine_name = selectedVaccine?.vaccine_name || '';
+        } else if (field === 'vaccine_name') {
+          selectedVaccine = vaccinationTypes.find(vt => vt.vaccine_name === value);
+          updated.vaccine_id = selectedVaccine?.id?.toString() || updated.vaccine_id || '';
+        }
+        return updated;
+      })
+    );
+
+    if (field === 'vaccine_id' || field === 'vaccine_name') {
+      const serviceId = `vaccination-${id}`;
+      const vaccine =
+        selectedVaccine ||
+        vaccinationTypes.find(vt =>
+          field === 'vaccine_id' ? vt.id.toString() === value : vt.vaccine_name === value
+        );
+
+      if (!value) {
+        setServiceItems(prev => prev.filter(item => item.id !== serviceId));
+        return;
+      }
+
+      const unitPrice = vaccine && vaccine.price !== undefined && vaccine.price !== null && !Number.isNaN(Number(vaccine.price))
+        ? Number(vaccine.price)
+        : 0;
+      const updatedItem: ServiceItem = {
+        id: serviceId,
+        service_name: 'Vaccination',
+        quantity: 1,
+        unit_price: unitPrice,
+        discount_percentage: 0,
+        total_amount: unitPrice
+      };
+
+      setServiceItems(prev => {
+        const existingIndex = prev.findIndex(item => item.id === serviceId);
+        if (existingIndex >= 0) {
+          return prev.map((item, idx) => (idx === existingIndex ? updatedItem : item));
+        }
+        const emptyIndex = prev.findIndex(item => !item.service_name);
+        if (emptyIndex >= 0) {
+          const updated = [...prev];
+          updated[emptyIndex] = updatedItem;
+          return updated;
+        }
+        return [...prev, updatedItem];
+      });
+    }
   };
 
   const addService = () => {
@@ -555,8 +623,21 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
   };
 
   const removeService = (id: string) => {
-    if (serviceItems.length > 1) {
-      setServiceItems(serviceItems.filter(s => s.id !== id));
+    setServiceItems(prev => {
+      const filtered = prev.filter(s => s.id !== id);
+      if (filtered.length === 0) {
+        return [{ id: '1', service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }];
+      }
+      return filtered;
+    });
+
+    if (id.startsWith('vaccination-')) {
+      const vaccinationId = id.replace('vaccination-', '');
+      setVaccinations(prev =>
+        prev.map(v =>
+          v.id === vaccinationId ? { ...v, vaccine_id: '', vaccine_name: '' } : v
+        )
+      );
     }
   };
 
@@ -600,12 +681,32 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
     setNextTreatmentDate(calculatedDate.toISOString().split('T')[0]);
   };
 
+  const openBillPrint = (id?: string | number | null) => {
+    if (!id) {
+      setError('Bill ID not available for printing. Please save the bill first.');
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.open(`/billing/print/${id}`, '_blank');
+    }
+  };
+
+  const openPrescriptionPrint = (id?: string | number | null) => {
+    if (!id) {
+      setError('Bill ID not available for prescription print. Please save the bill first.');
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.open(`/billing/prescription/${id}`, '_blank');
+    }
+  };
+
   const handleCancel = () => {
     const target = onSuccessRedirect || '/dashboard?tab=list-bills';
     router.push(target);
   };
 
-  const handleSave = async () => {
+  const handleSave = async (postSaveAction?: 'print' | 'prescription') => {
     if (!selectedPet) {
       setError('Please select a pet');
       return;
@@ -661,7 +762,14 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
         discount_amount: discountAmount,
         grand_total: grandTotal,
         prescriptions: prescriptions.filter(p => p.drug_name),
-        vaccinations: vaccinations.filter(v => v.vaccine_name),
+        vaccinations: vaccinations
+          .filter(v => v.vaccine_id || v.vaccine_name)
+          .map(v => ({
+            vaccine_id: v.vaccine_id ? Number(v.vaccine_id) || null : null,
+            vaccine_name: v.vaccine_name,
+            next_vaccination_date: v.next_vaccination_date,
+            duration_slots: v.duration_slots
+          })),
         services: serviceItems.filter(s => s.service_name),
         // Include updated pet and owner information
         pet_info: petInfo,
@@ -678,6 +786,14 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
       
       if (result.success) {
         setSuccess(isEditMode ? 'Bill updated successfully!' : 'Bill created successfully!');
+        const savedBillId = billId || result?.data?.bill_id || null;
+
+        if (postSaveAction === 'print') {
+          openBillPrint(savedBillId);
+        } else if (postSaveAction === 'prescription') {
+          openPrescriptionPrint(savedBillId);
+        }
+
         if (isEditMode) {
           if (onSuccessRedirect) {
             router.push(onSuccessRedirect);
@@ -692,7 +808,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
           setClinicalObservation('');
           setTreatmentRemarks('');
           setPrescriptions([{ id: '1', drug_name: '', dose: '', dosage: '', duration: '' }]);
-          setVaccinations([{ id: '1', vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]);
+          setVaccinations([{ id: '1', vaccine_id: '', vaccine_name: '', next_vaccination_date: '', duration_slots: '' }]);
           setServiceItems([{ id: '1', service_name: '', quantity: 1, unit_price: 0, discount_percentage: 0, total_amount: 0 }]);
           setDiscountAmount(0);
           setDiscountInputValue('0');
@@ -1178,14 +1294,14 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Vaccine Name</label>
                     <select
-                      value={vaccination.vaccine_name}
-                      onChange={(e) => updateVaccination(vaccination.id, 'vaccine_name', e.target.value)}
+                      value={vaccination.vaccine_id}
+                      onChange={(e) => updateVaccination(vaccination.id, 'vaccine_id', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
                       style={{ color: '#1f2937', backgroundColor: 'white' }}
                     >
                       <option value="" style={{ color: '#1f2937', backgroundColor: 'white' }}>Select Vaccine</option>
                       {vaccinationTypes.map(vaccine => (
-                        <option key={vaccine.id} value={vaccine.vaccine_name} style={{ color: '#1f2937', backgroundColor: 'white' }}>
+                        <option key={vaccine.id} value={vaccine.id} style={{ color: '#1f2937', backgroundColor: 'white' }}>
                           {vaccine.vaccine_name}
                         </option>
                       ))}
@@ -1339,7 +1455,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price ({currencySymbol})</label>
                     <input
                       type="number"
                       value={service.unit_price}
@@ -1363,7 +1479,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Total Amount ({currencySymbol})</label>
                     <input
                       type="number"
                       value={service.total_amount}
@@ -1374,7 +1490,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                   </div>
 
                   <div className="flex items-end">
-                    {serviceItems.length > 1 && (
+                    {(serviceItems.length > 1 || service.id.startsWith('vaccination-')) && (
                       <button
                         type="button"
                         onClick={() => removeService(service.id)}
@@ -1397,7 +1513,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Net Total</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Net Total ({currencySymbol})</label>
                   <input
                     type="number"
                     value={netTotal}
@@ -1408,7 +1524,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Amount</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Discount Amount ({currencySymbol})</label>
                   <input
                     type="number"
                     min="0"
@@ -1420,7 +1536,7 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Grand Total</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Grand Total ({currencySymbol})</label>
                   <input
                     type="number"
                     value={grandTotal}
@@ -1434,20 +1550,51 @@ export default function BillingTemplate(props: BillingTemplateProps = {}) {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-4">
+          <div className="flex flex-wrap justify-end gap-3">
             <button
               type="button"
               onClick={handleCancel}
-              className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              className="px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors inline-flex items-center gap-2"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
               Cancel
             </button>
             <button
               type="button"
-              onClick={handleSave}
+              onClick={() => handleSave('print')}
               disabled={isLoading}
-              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V4h12v5" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 14h12v6H6z" />
+              </svg>
+              {isLoading ? 'Working...' : 'Save & Print Bill'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave('prescription')}
+              disabled={isLoading}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 8h6m-6 4h6m-6 4h3" />
+              </svg>
+              {isLoading ? 'Working...' : 'Save & Print Prescription'}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSave()}
+              disabled={isLoading}
+              className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+              </svg>
               {isLoading ? (isEditMode ? 'Updating...' : 'Saving...') : (isEditMode ? 'Update Bill' : 'Save Bill')}
             </button>
           </div>

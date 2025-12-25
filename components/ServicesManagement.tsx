@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useCurrency } from '@/context/CurrencyContext';
 
 interface Service {
   id: number;
@@ -17,6 +18,7 @@ interface Service {
 }
 
 export default function ServicesManagement() {
+  const { currencySymbol, formatAmount } = useCurrency();
   const [services, setServices] = useState<Service[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -269,7 +271,7 @@ export default function ServicesManagement() {
                     {service.duration_minutes} min
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    ${service.base_price}
+                    {formatAmount(service.base_price)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <span className={`px-2 py-1 rounded-full text-xs ${
@@ -382,7 +384,7 @@ export default function ServicesManagement() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Base Price ($) *
+                    Base Price ({currencySymbol}) *
                   </label>
                   <input
                     type="number"
@@ -489,7 +491,7 @@ export default function ServicesManagement() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Base Price</label>
-                  <p className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">${viewingService.base_price}</p>
+                  <p className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">{formatAmount(viewingService.base_price)}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>

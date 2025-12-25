@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useCurrency } from '@/context/CurrencyContext';
 
 interface VaccinationType {
   id: number;
@@ -9,6 +10,7 @@ interface VaccinationType {
   target_species: string;
   age_requirement_months: number;
   frequency_months: number;
+  price: number | string | null;
   description: string;
   side_effects: string;
   contraindications: string;
@@ -18,6 +20,7 @@ interface VaccinationType {
 }
 
 export default function VaccinationTypesManagement() {
+  const { formatAmount, currencySymbol } = useCurrency();
   const [vaccinationTypes, setVaccinationTypes] = useState<VaccinationType[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +37,7 @@ export default function VaccinationTypesManagement() {
     target_species: '',
     age_requirement_months: '',
     frequency_months: '',
+    price: '',
     description: '',
     side_effects: '',
     contraindications: ''
@@ -81,7 +85,8 @@ export default function VaccinationTypesManagement() {
         body: JSON.stringify({
           ...formData,
           age_requirement_months: formData.age_requirement_months ? parseInt(formData.age_requirement_months) : null,
-          frequency_months: formData.frequency_months ? parseInt(formData.frequency_months) : null
+          frequency_months: formData.frequency_months ? parseInt(formData.frequency_months) : null,
+          price: formData.price ? parseFloat(formData.price) : null
         }),
       });
 
@@ -97,6 +102,7 @@ export default function VaccinationTypesManagement() {
           target_species: '',
           age_requirement_months: '',
           frequency_months: '',
+          price: '',
           description: '',
           side_effects: '',
           contraindications: ''
@@ -119,6 +125,7 @@ export default function VaccinationTypesManagement() {
       target_species: vaccinationType.target_species || '',
       age_requirement_months: vaccinationType.age_requirement_months?.toString() || '',
       frequency_months: vaccinationType.frequency_months?.toString() || '',
+      price: vaccinationType.price !== null && vaccinationType.price !== undefined ? vaccinationType.price.toString() : '',
       description: vaccinationType.description || '',
       side_effects: vaccinationType.side_effects || '',
       contraindications: vaccinationType.contraindications || ''
@@ -166,6 +173,7 @@ export default function VaccinationTypesManagement() {
       target_species: '',
       age_requirement_months: '',
       frequency_months: '',
+      price: '',
       description: '',
       side_effects: '',
       contraindications: ''
@@ -256,6 +264,9 @@ export default function VaccinationTypesManagement() {
                   Frequency
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Price
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
                 </th>
               </tr>
@@ -285,6 +296,9 @@ export default function VaccinationTypesManagement() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {vaccinationType.frequency_months ? `${vaccinationType.frequency_months} months` : 'N/A'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {formatAmount(vaccinationType.price)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
@@ -395,17 +409,33 @@ export default function VaccinationTypesManagement() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Frequency (months)
-                </label>
-                <input
-                  type="number"
-                  value={formData.frequency_months}
-                  onChange={(e) => setFormData({ ...formData, frequency_months: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
-                  placeholder="Enter frequency in months"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Frequency (months)
+                  </label>
+                  <input
+                    type="number"
+                    value={formData.frequency_months}
+                    onChange={(e) => setFormData({ ...formData, frequency_months: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
+                    placeholder="Enter frequency in months"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Price ({currencySymbol})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900"
+                    placeholder="Enter price"
+                  />
+                </div>
               </div>
 
               <div>
@@ -522,6 +552,13 @@ export default function VaccinationTypesManagement() {
                       : 'Not specified'}
                   </p>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                <p className="text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">
+                  {formatAmount(viewingVaccinationType.price)}
+                </p>
               </div>
               
               <div>

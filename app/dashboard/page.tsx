@@ -17,7 +17,11 @@ import DosageMasterManagement from '@/components/DosageMasterManagement';
 import BillingTemplate from '@/components/BillingTemplate';
 import BillsList from '@/components/BillsList';
 import BillingSearch from '@/components/BillingSearch';
+import DoctorReport from '@/components/DoctorReport';
+import VaccinationSales from '@/components/VaccinationSales';
 import Sidebar from '@/components/Sidebar';
+import { CurrencyProvider } from '@/context/CurrencyContext';
+import SystemSettings from '@/components/SystemSettings';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -91,7 +95,8 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <CurrencyProvider>
+      <div className="flex h-screen bg-gray-100">
       {/* Sidebar */}
       <Sidebar activeTab={activeTab} onTabChange={handleTabChange} user={user} />
       
@@ -328,6 +333,18 @@ export default function Dashboard() {
             <BillingSearch />
           )}
 
+          {activeTab === 'billing-report' && (
+            <BillingSearch mode="report" />
+          )}
+
+          {activeTab === 'doctor-report' && (
+            <DoctorReport />
+          )}
+
+          {activeTab === 'vaccination-sales' && (
+            <VaccinationSales />
+          )}
+
           {activeTab === 'patients' && (
             <div className="bg-white rounded-lg shadow p-6">
               <h2 className="text-2xl font-bold text-gray-900 mb-4">Patient Management</h2>
@@ -422,8 +439,13 @@ export default function Dashboard() {
           {activeTab === 'dosage-master' && user?.user_type === 1 && (
             <DosageMasterManagement />
           )}
+
+          {activeTab === 'system-settings' && user?.user_type === 1 && (
+            <SystemSettings />
+          )}
         </main>
       </div>
     </div>
+    </CurrencyProvider>
   );
 }

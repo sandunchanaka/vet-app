@@ -43,7 +43,8 @@ export async function POST(request: NextRequest) {
       frequency_months, 
       description, 
       side_effects, 
-      contraindications 
+      contraindications,
+      price
     } = await request.json();
 
     if (!vaccine_name) {
@@ -52,6 +53,8 @@ export async function POST(request: NextRequest) {
         message: 'Vaccine name is required'
       }, { status: 400 });
     }
+
+    const parsedPrice = price === undefined || price === '' ? null : (Number(price) || null);
 
     connection = await pool.getConnection();
 
@@ -72,8 +75,8 @@ export async function POST(request: NextRequest) {
     const [result] = await connection.execute(
       `INSERT INTO vaccination_types (
         vaccine_name, vaccine_type, target_species, age_requirement_months, 
-        frequency_months, description, side_effects, contraindications, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        frequency_months, description, side_effects, contraindications, price, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         vaccine_name, 
         vaccine_type || 'core', 
@@ -83,6 +86,7 @@ export async function POST(request: NextRequest) {
         description || null, 
         side_effects || null, 
         contraindications || null, 
+        parsedPrice, 
         1
       ]
     );

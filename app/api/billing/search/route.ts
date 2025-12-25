@@ -1,140 +1,173 @@
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/database';
 
-const getDefaultDateRange = () => {
-  const today = new Date();
-  const start = new Date(today.getFullYear(), today.getMonth(), 1);
-  const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
-  const format = (date: Date) => date.toISOString().split('T')[0];
-
-  return {
-    startDate: format(start),
-    endDate: format(end)
-  };
-};
-
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const startDate = searchParams.get('startDate');
+  const endDate = searchParams.get('endDate');
+  const doctorId = searchParams.get('doctorId');
+  const petId = searchParams.get('petId');
+  const petCategoryId = searchParams.get('petCategoryId');
+  const billId = (searchParams.get('billId') || '').trim();
+  const billIdNumber = billId ? Number(billId) : null;
+  const billNumber = (searchParams.get('billNumber') || '').trim();
+  const petName = (searchParams.get('petName') || '').trim();
+  const ownerName = (searchParams.get('ownerName') || '').trim();
+  const ownerEmail = (searchParams.get('ownerEmail') || '').trim();
+  const ownerPhone = (searchParams.get('ownerPhone') || '').trim();
+
+  if (!startDate || !endDate) {
+    return NextResponse.json(
+      { success: false, message: 'startDate and endDate are required' },
+      { status: 400 }
+    );
+  }
+
   let connection;
-
   try {
-    const url = new URL(request.url);
-    const defaults = getDefaultDateRange();
-
-    const startDate = url.searchParams.get('startDate') || defaults.startDate;
-    const endDate = url.searchParams.get('endDate') || defaults.endDate;
-    const doctorId = url.searchParams.get('doctorId');
-    const petId = url.searchParams.get('petId');
-
     connection = await pool.getConnection();
 
-    const conditions: string[] = [];
-    const params: (string | number)[] = [];
-
-    if (startDate) {
-      conditions.push('DATE(b.billing_date) >= ?');
-      params.push(startDate);
-    }
-
-    if (endDate) {
-      conditions.push('DATE(b.billing_date) <= ?');
-      params.push(endDate);
-    }
+    const conditions: string[] = ['b.billing_date BETWEEN ? AND ?'];
+    const params: any[] = [startDate, endDate];
 
     if (doctorId && doctorId !== 'any') {
       conditions.push('b.veterinarian_id = ?');
-      params.push(Number(doctorId));
+      params.push(doctorId);
     }
 
     if (petId && petId !== 'any') {
       conditions.push('b.pet_id = ?');
-      params.push(Number(petId));
+      params.push(petId);
+    }
+
+    if (petCategoryId && petCategoryId !== 'any') {
+      conditions.push('p.pet_category_id = ?');
+      params.push(petCategoryId);
+    }
+
+    if (billIdNumber && !Number.isNaN(billIdNumber)) {
+      conditions.push('b.bill_id = ?');
+      params.push(billIdNumber);
+    }
+
+    if (billNumber) {
+      conditions.push('b.bill_number LIKE ?');
+      params.push(`%${billNumber}%`);
+    }
+
+    if (petName) {
+      conditions.push('p.name LIKE ?');
+      params.push(`%${petName}%`);
+    }
+
+    if (ownerName) {
+      conditions.push('po.owner_name LIKE ?');
+      params.push(`%${ownerName}%`);
+    }
+
+    if (ownerEmail) {
+      conditions.push('po.email LIKE ?');
+      params.push(`%${ownerEmail}%`);
+    }
+
+    if (ownerPhone) {
+      conditions.push('po.phone LIKE ?');
+      params.push(`%${ownerPhone}%`);
     }
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-    const summaryQuery = `
-      SELECT 
-        COUNT(*) AS bill_count,
-        COALESCE(SUM(b.grand_total), 0) AS total_billing
-      FROM bills b
-      ${whereClause}
-    `;
 
-    const trendQuery = `
-      SELECT 
-        DATE(b.billing_date) AS billing_day,
-        COALESCE(SUM(b.grand_total), 0) AS total_amount,
-        COUNT(*) AS bill_count
-      FROM bills b
-      ${whereClause}
-      GROUP BY DATE(b.billing_date)
-      ORDER BY billing_day ASC
-    `;
+    const [bills] = await connection.execute(
+      `
+        SELECT 
+          b.bill_id,
+          b.bill_number,
+          b.billing_date,
+          b.grand_total,
+          b.net_total,
+          b.discount_amount,
+          b.status,
+          b.pet_id,
+          p.name AS pet_name,
+          p.pet_code,
+          p.pet_category_id,
+          pc.category_name,
+          p.owner_id,
+          po.owner_name,
+          po.phone AS owner_phone,
+          po.email AS owner_email,
+          b.veterinarian_id,
+          v.first_name AS vet_first_name,
+          v.last_name AS vet_last_name
+        FROM bills b
+        LEFT JOIN pets p ON b.pet_id = p.pet_id
+        LEFT JOIN pet_categories pc ON p.pet_category_id = pc.id
+        LEFT JOIN pet_owners po ON b.owner_id = po.owner_id
+        LEFT JOIN veterinarians v ON b.veterinarian_id = v.vet_id
+        ${whereClause}
+        ORDER BY b.billing_date DESC, b.created_at DESC
+      `,
+      params
+    );
 
-    const revenueByDoctorQuery = `
-      SELECT 
-        b.veterinarian_id AS doctor_id,
-        COALESCE(CONCAT(v.first_name, ' ', v.last_name), 'Unknown Doctor') AS doctor_name,
-        COALESCE(SUM(b.grand_total), 0) AS total_amount
-      FROM bills b
-      LEFT JOIN veterinarians v ON b.veterinarian_id = v.vet_id
-      ${whereClause}
-      GROUP BY b.veterinarian_id, v.first_name, v.last_name
-      HAVING total_amount > 0
-      ORDER BY total_amount DESC
-    `;
+    const [trend] = await connection.execute(
+      `
+        SELECT 
+          DATE(b.billing_date) AS billing_day,
+          SUM(b.grand_total) AS total_amount,
+          COUNT(*) AS bill_count
+        FROM bills b
+        LEFT JOIN pets p ON b.pet_id = p.pet_id
+        LEFT JOIN pet_categories pc ON p.pet_category_id = pc.id
+        LEFT JOIN pet_owners po ON b.owner_id = po.owner_id
+        ${whereClause}
+        GROUP BY DATE(b.billing_date)
+        ORDER BY billing_day ASC
+      `,
+      params
+    );
 
-    const billsQuery = `
-      SELECT 
-        b.bill_id,
-        b.bill_number,
-        b.billing_date,
-        b.grand_total,
-        b.status,
-        p.pet_id,
-        p.name AS pet_name,
-        b.veterinarian_id,
-        v.first_name AS vet_first_name,
-        v.last_name AS vet_last_name
-      FROM bills b
-      LEFT JOIN pets p ON b.pet_id = p.pet_id
-      LEFT JOIN veterinarians v ON b.veterinarian_id = v.vet_id
-      ${whereClause}
-      ORDER BY b.billing_date DESC, b.bill_id DESC
-    `;
+    const [revenueByDoctor] = await connection.execute(
+      `
+        SELECT 
+          b.veterinarian_id AS doctor_id,
+          CONCAT(v.first_name, ' ', v.last_name) AS doctor_name,
+          SUM(b.grand_total) AS total_amount
+        FROM bills b
+        LEFT JOIN veterinarians v ON b.veterinarian_id = v.vet_id
+        LEFT JOIN pets p ON b.pet_id = p.pet_id
+        LEFT JOIN pet_categories pc ON p.pet_category_id = pc.id
+        LEFT JOIN pet_owners po ON b.owner_id = po.owner_id
+        ${whereClause}
+        GROUP BY b.veterinarian_id, v.first_name, v.last_name
+        ORDER BY total_amount DESC
+      `,
+      params
+    );
 
-    const [summaryRows] = await connection.execute(summaryQuery, params);
-    const summaryRow = (summaryRows as any[])[0] || { bill_count: 0, total_billing: 0 };
-    const totalBills = Number(summaryRow.bill_count) || 0;
-    const totalAmount = Number(summaryRow.total_billing) || 0;
-    const averagePerBill = totalBills > 0 ? totalAmount / totalBills : 0;
-
-    const [trendRows] = await connection.execute(trendQuery, params);
-    const [revenueByDoctorRows] = await connection.execute(revenueByDoctorQuery, params);
-    const [billRows] = await connection.execute(billsQuery, params);
+    const numericTotal = (bills as any[]).reduce((sum, row) => sum + (Number(row.grand_total) || 0), 0);
+    const totalBills = Array.isArray(bills) ? bills.length : 0;
 
     return NextResponse.json({
       success: true,
       data: {
+        bills,
         summary: {
           totalBills,
-          totalAmount,
-          averagePerBill
+          totalAmount: numericTotal,
+          averagePerBill: totalBills > 0 ? numericTotal / totalBills : 0
         },
-        revenueTrend: trendRows,
-        revenueByDoctor: revenueByDoctorRows,
-        bills: billRows
+        revenueTrend: trend,
+        revenueByDoctor
       }
     });
   } catch (error) {
-    console.error('Error generating billing search report:', error);
+    console.error('Error loading billing search report:', error);
     return NextResponse.json(
-      { success: false, message: 'Failed to load billing search data' },
+      { success: false, message: 'Unable to load billing report' },
       { status: 500 }
     );
   } finally {
-    if (connection) {
-      connection.release();
-    }
+    if (connection) connection.release();
   }
 }
