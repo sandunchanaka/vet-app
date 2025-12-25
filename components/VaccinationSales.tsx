@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface VaccineRow {
+  vaccine_id?: number | string;
   vaccine_name: string;
   vaccination_entries: number;
   vaccination_quantity: number;
@@ -207,16 +208,19 @@ export default function VaccinationSales() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {(report?.vaccines || []).map((vaccine) => (
-                <tr key={vaccine.vaccine_name} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-semibold text-gray-900">{vaccine.vaccine_name}</td>
-                  <td className="px-4 py-3">{formatNumber(vaccine.vaccination_entries || 0)}</td>
-                  <td className="px-4 py-3">{formatNumber(vaccine.service_entries || 0)}</td>
-                  <td className="px-4 py-3 font-semibold text-gray-900">
-                    {formatNumber((vaccine.vaccination_quantity || 0) + (vaccine.service_entries || 0))}
-                  </td>
-                </tr>
-              ))}
+              {(report?.vaccines || []).map((vaccine) => {
+                const rowKey = (vaccine.vaccine_id ?? vaccine.vaccine_name)?.toString() || vaccine.vaccine_name;
+                return (
+                  <tr key={rowKey} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-semibold text-gray-900">{vaccine.vaccine_name}</td>
+                    <td className="px-4 py-3">{formatNumber(vaccine.vaccination_entries || 0)}</td>
+                    <td className="px-4 py-3">{formatNumber(vaccine.service_entries || 0)}</td>
+                    <td className="px-4 py-3 font-semibold text-gray-900">
+                      {formatNumber((vaccine.vaccination_quantity || 0) + (vaccine.service_entries || 0))}
+                    </td>
+                  </tr>
+                );
+              })}
               {(!report?.vaccines || report.vaccines.length === 0) && (
                 <tr>
                   <td colSpan={4} className="px-4 py-6 text-center text-gray-500">

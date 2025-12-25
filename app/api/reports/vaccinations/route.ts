@@ -26,9 +26,10 @@ export async function GET(request: NextRequest) {
       `
         SELECT
           COALESCE(SUM(bv.quantity), COUNT(bv.vaccination_id)) AS totalVaccinations,
-          COUNT(DISTINCT bv.vaccine_name) AS vaccineTypes
+          COUNT(DISTINCT COALESCE(vt.id, bv.vaccine_id, bv.vaccine_name)) AS vaccineTypes
         FROM bill_vaccinations bv
         JOIN bills b ON bv.bill_id = b.bill_id
+        LEFT JOIN vaccination_types vt ON vt.id = bv.vaccine_id OR vt.vaccine_name = bv.vaccine_name
         ${whereClause}
       `,
       params
@@ -37,15 +38,17 @@ export async function GET(request: NextRequest) {
     const [vaccineRows] = await connection.execute(
       `
         SELECT 
-          bv.vaccine_name,
+          COALESCE(vt.vaccine_name, bv.vaccine_name) AS vaccine_name,
+          COALESCE(vt.id, bv.vaccine_id) AS vaccine_id,
           COUNT(*) AS vaccination_entries,
           COALESCE(SUM(bv.quantity), COUNT(*)) AS vaccination_quantity,
           COALESCE(SUM(bs.quantity), 0) AS service_entries
         FROM bill_vaccinations bv
         JOIN bills b ON bv.bill_id = b.bill_id
-        LEFT JOIN bill_services bs ON bs.bill_id = b.bill_id AND bs.service_name = bv.vaccine_name
+        LEFT JOIN vaccination_types vt ON vt.id = bv.vaccine_id OR vt.vaccine_name = bv.vaccine_name
+        LEFT JOIN bill_services bs ON bs.bill_id = b.bill_id AND (bs.service_name = vt.vaccine_name OR bs.service_name = bv.vaccine_name)
         ${whereClause}
-        GROUP BY bv.vaccine_name
+        GROUP BY COALESCE(vt.id, bv.vaccine_id, bv.vaccine_name), COALESCE(vt.vaccine_name, bv.vaccine_name)
         ORDER BY vaccination_quantity DESC
       `,
       params

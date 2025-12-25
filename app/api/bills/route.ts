@@ -147,9 +147,11 @@ export async function POST(request: NextRequest) {
       // Insert vaccinations
       if (vaccinations && vaccinations.length > 0) {
         for (const vaccination of vaccinations) {
+          const vaccineId = vaccination.vaccine_id || vaccination.id || null;
+          const vaccineName = vaccination.vaccine_name || vaccination.vaccineName || (vaccineId ? String(vaccineId) : '');
           await connection.execute(
-            'INSERT INTO bill_vaccinations (bill_id, vaccine_name, next_vaccination_date, duration_slots) VALUES (?, ?, ?, ?)',
-            [billId, vaccination.vaccine_name, vaccination.next_vaccination_date, vaccination.duration_slots]
+            'INSERT INTO bill_vaccinations (bill_id, vaccine_id, vaccine_name, next_vaccination_date, duration_slots) VALUES (?, ?, ?, ?, ?)',
+            [billId, vaccineId, vaccineName, vaccination.next_vaccination_date, vaccination.duration_slots]
           );
         }
       }

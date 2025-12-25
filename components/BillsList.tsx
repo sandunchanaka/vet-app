@@ -33,6 +33,7 @@ interface BillPrescription {
 }
 
 interface BillVaccination {
+  vaccine_id?: number | string;
   vaccine_name: string;
   next_vaccination_date: string;
   duration_slots: string;
@@ -200,6 +201,16 @@ export default function BillsList() {
     setIsDetailModalOpen(false);
     setSelectedBill(null);
     setDetailError(null);
+  };
+
+  const openBillPrint = (billId?: number) => {
+    if (!billId || typeof window === 'undefined') return;
+    window.open(`/billing/print/${billId}`, '_blank');
+  };
+
+  const openPrescriptionPrint = (billId?: number) => {
+    if (!billId || typeof window === 'undefined') return;
+    window.open(`/billing/prescription/${billId}`, '_blank');
   };
 
   const handleAddBill = () => {
@@ -577,16 +588,43 @@ export default function BillsList() {
                 </p>
                 {selectedBill?.status && <div className="mt-2">{renderStatusPill(selectedBill.status)}</div>}
               </div>
-              <button
-                type="button"
-                onClick={closeDetailModal}
-                className="text-gray-500 hover:text-gray-700"
-                aria-label="Close bill details"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => openBillPrint(selectedBill?.bill_id)}
+                  className="inline-flex items-center gap-1 rounded-md bg-indigo-50 text-indigo-700 px-3 py-2 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+                  aria-label="Print bill"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 9V4h12v5" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 14h12v6H6z" />
+                  </svg>
+                  Print Bill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openPrescriptionPrint(selectedBill?.bill_id)}
+                  className="inline-flex items-center gap-1 rounded-md bg-emerald-50 text-emerald-700 px-3 py-2 text-xs font-semibold hover:bg-emerald-100 transition-colors"
+                  aria-label="Print prescription"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 8h6m-6 4h6m-6 4h3" />
+                  </svg>
+                  Print Rx
+                </button>
+                <button
+                  type="button"
+                  onClick={closeDetailModal}
+                  className="text-gray-500 hover:text-gray-700"
+                  aria-label="Close bill details"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
 
             <div className="overflow-y-auto px-6 py-5 space-y-6">

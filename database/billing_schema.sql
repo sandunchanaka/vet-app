@@ -52,11 +52,13 @@ CREATE TABLE IF NOT EXISTS bill_prescriptions (
 CREATE TABLE IF NOT EXISTS bill_vaccinations (
     vaccination_id INT AUTO_INCREMENT PRIMARY KEY,
     bill_id INT NOT NULL,
+    vaccine_id INT,
     vaccine_name VARCHAR(100) NOT NULL,
     next_vaccination_date DATE,
     duration_slots VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (bill_id) REFERENCES bills(bill_id) ON DELETE CASCADE
+    FOREIGN KEY (bill_id) REFERENCES bills(bill_id) ON DELETE CASCADE,
+    FOREIGN KEY (vaccine_id) REFERENCES vaccination_types(id) ON DELETE SET NULL
 );
 
 -- Indexes for better performance
@@ -68,3 +70,4 @@ CREATE INDEX idx_bills_status ON bills(status);
 CREATE INDEX idx_bill_services_bill_id ON bill_services(bill_id);
 CREATE INDEX idx_bill_prescriptions_bill_id ON bill_prescriptions(bill_id);
 CREATE INDEX idx_bill_vaccinations_bill_id ON bill_vaccinations(bill_id);
+CREATE INDEX idx_bill_vaccinations_vaccine_id ON bill_vaccinations(vaccine_id);

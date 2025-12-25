@@ -95,18 +95,13 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
 
     const [vaccinations] = await connection.execute(
       `SELECT 
+         bv.vaccine_id,
          COALESCE(vt.vaccine_name, bv.vaccine_name) AS vaccine_name,
          bv.next_vaccination_date,
          bv.duration_slots
        FROM bill_vaccinations bv
        LEFT JOIN vaccination_types vt 
-         ON (
-           vt.id = CASE 
-             WHEN bv.vaccine_name REGEXP '^[0-9]+$' THEN CAST(bv.vaccine_name AS UNSIGNED) 
-             ELSE NULL
-           END
-           OR vt.vaccine_name = bv.vaccine_name
-         )
+         ON (vt.id = bv.vaccine_id OR vt.vaccine_name = bv.vaccine_name)
        WHERE bv.bill_id = ?`,
       [billId]
     );
@@ -217,9 +212,11 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 
     if (Array.isArray(vaccinations) && vaccinations.length > 0) {
       for (const vaccination of vaccinations) {
+        const vaccineId = vaccination.vaccine_id || vaccination.id || null;
+        const vaccineName = vaccination.vaccine_name || vaccination.vaccineName || (vaccineId ? String(vaccineId) : '');
         await connection.execute(
-          'INSERT INTO bill_vaccinations (bill_id, vaccine_name, next_vaccination_date, duration_slots) VALUES (?, ?, ?, ?)',
-          [billId, vaccination.vaccine_name, vaccination.next_vaccination_date, vaccination.duration_slots]
+          'INSERT INTO bill_vaccinations (bill_id, vaccine_id, vaccine_name, next_vaccination_date, duration_slots) VALUES (?, ?, ?, ?, ?)',
+          [billId, vaccineId, vaccineName, vaccination.next_vaccination_date, vaccination.duration_slots]
         );
       }
     }

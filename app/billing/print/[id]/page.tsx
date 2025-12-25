@@ -21,6 +21,7 @@ interface BillPrescription {
 }
 
 interface BillVaccination {
+  vaccine_id?: number | string;
   vaccine_name: string;
   next_vaccination_date: string;
   duration_slots: string;
