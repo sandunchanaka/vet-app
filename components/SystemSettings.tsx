@@ -11,13 +11,18 @@ const currencyOptions = [
 export default function SystemSettings() {
   const { currency, setCurrency, currencySymbol } = useCurrency();
   const [selected, setSelected] = useState(currency);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
 
   useEffect(() => {
     setSelected(currency);
+    setStatus('idle');
   }, [currency]);
 
   const handleSave = () => {
+    setStatus('saving');
     setCurrency(selected);
+    setStatus('saved');
+    setTimeout(() => setStatus('idle'), 1500);
   };
 
   return (
@@ -64,12 +69,16 @@ export default function SystemSettings() {
           <div>
             <p className="text-sm text-gray-600">Current currency symbol</p>
             <p className="text-lg font-semibold text-gray-900">{currencySymbol}</p>
+            {status === 'saved' && (
+              <p className="text-xs text-green-600 mt-1">Saved. This preference will stick for your next visit.</p>
+            )}
           </div>
           <button
             onClick={handleSave}
-            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            disabled={status === 'saving'}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-60"
           >
-            Save Changes
+            {status === 'saving' ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
       </div>

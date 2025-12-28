@@ -17,20 +17,17 @@ export async function GET(request: NextRequest) {
   try {
     connection = await pool.getConnection();
 
-    const conditions: string[] = ['b.billing_date BETWEEN ? AND ?'];
     const params: any[] = [startDate, endDate];
-
-    const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
     const [summaryRows] = await connection.execute(
       `
         SELECT
-          COALESCE(SUM(bv.quantity), COUNT(bv.vaccination_id)) AS totalVaccinations,
-          COUNT(DISTINCT COALESCE(vt.id, bv.vaccine_id, bv.vaccine_name)) AS vaccineTypes
+          COUNT(*) AS totalVaccinations,
+          COUNT(DISTINCT COALESCE(vt.id, bv.vaccine_id, bv.vaccine_name)) AS vaccineTypes,
+          COALESCE(SUM(COALESCE(vt.price, 0)), 0) AS totalRevenue
         FROM bill_vaccinations bv
-        JOIN bills b ON bv.bill_id = b.bill_id
+        JOIN bills b ON bv.bill_id = b.bill_id AND b.billing_date BETWEEN ? AND ?
         LEFT JOIN vaccination_types vt ON vt.id = bv.vaccine_id OR vt.vaccine_name = bv.vaccine_name
-        ${whereClause}
       `,
       params
     );
@@ -39,26 +36,41 @@ export async function GET(request: NextRequest) {
       `
         SELECT 
           COALESCE(vt.vaccine_name, bv.vaccine_name) AS vaccine_name,
-          COALESCE(vt.id, bv.vaccine_id) AS vaccine_id,
-          COUNT(*) AS vaccination_entries,
-          COALESCE(SUM(bv.quantity), COUNT(*)) AS vaccination_quantity,
-          COALESCE(SUM(bs.quantity), 0) AS service_entries
+          COALESCE(vt.id, bv.vaccine_id, bv.vaccine_name) AS vaccine_id,
+          COUNT(*) AS vaccination_count,
+          COALESCE(vt.price, 0) AS unit_price,
+          COUNT(*) * COALESCE(vt.price, 0) AS total_amount
         FROM bill_vaccinations bv
-        JOIN bills b ON bv.bill_id = b.bill_id
+        JOIN bills b ON bv.bill_id = b.bill_id AND b.billing_date BETWEEN ? AND ?
         LEFT JOIN vaccination_types vt ON vt.id = bv.vaccine_id OR vt.vaccine_name = bv.vaccine_name
-        LEFT JOIN bill_services bs ON bs.bill_id = b.bill_id AND (bs.service_name = vt.vaccine_name OR bs.service_name = bv.vaccine_name)
-        ${whereClause}
-        GROUP BY COALESCE(vt.id, bv.vaccine_id, bv.vaccine_name), COALESCE(vt.vaccine_name, bv.vaccine_name)
-        ORDER BY vaccination_quantity DESC
+        GROUP BY COALESCE(vt.id, bv.vaccine_id, bv.vaccine_name), COALESCE(vt.vaccine_name, bv.vaccine_name), vt.price
+        ORDER BY vaccination_count DESC, vaccine_name ASC
       `,
       params
     );
 
+    const rawSummary = Array.isArray(summaryRows) && summaryRows[0] ? summaryRows[0] : { totalVaccinations: 0, vaccineTypes: 0, totalRevenue: 0 };
+    const summary = {
+      totalVaccinations: Number((rawSummary as any).totalVaccinations) || 0,
+      vaccineTypes: Number((rawSummary as any).vaccineTypes) || 0,
+      totalRevenue: Number((rawSummary as any).totalRevenue) || 0
+    };
+
+    const vaccines = Array.isArray(vaccineRows)
+      ? (vaccineRows as any[]).map((row) => ({
+          vaccine_name: row.vaccine_name,
+          vaccine_id: row.vaccine_id,
+          vaccination_count: Number(row.vaccination_count) || 0,
+          unit_price: Number(row.unit_price) || 0,
+          total_amount: Number(row.total_amount) || 0
+        }))
+      : [];
+
     return NextResponse.json({
       success: true,
       data: {
-        summary: Array.isArray(summaryRows) && summaryRows[0] ? summaryRows[0] : { totalVaccinations: 0, vaccineTypes: 0 },
-        vaccines: vaccineRows || [],
+        summary,
+        vaccines,
         dateRange: { startDate, endDate }
       }
     });

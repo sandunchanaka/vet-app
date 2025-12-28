@@ -8,6 +8,7 @@ interface User {
   last_name: string;
   email: string;
   phone: string;
+  phone_number?: string;
   business_name?: string;
   website?: string;
   user_type: number;
@@ -58,18 +59,22 @@ export default function UserManagement() {
     fetchUserTypes();
   }, []);
 
+  const getToken = () => localStorage.getItem('auth_token') || localStorage.getItem('token') || '';
+
   const fetchUsers = async () => {
     try {
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const token = getToken();
+      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
+      const response = await fetch('/api/users', { headers });
 
       const result = await response.json();
       if (result.success) {
-        setUsers(result.data);
+        const normalizedUsers: User[] = (result.data as any[]).map((u) => ({
+          ...u,
+          phone: u.phone ?? u.phone_number ?? u.phoneNumber ?? '',
+          user_type_name: u.user_type_name ?? u.user_type ?? ''
+        }));
+        setUsers(normalizedUsers);
       } else {
         setError(result.message);
       }
@@ -95,13 +100,12 @@ export default function UserManagement() {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = getToken();
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch('/api/users', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify(formData)
       });
 
@@ -124,13 +128,12 @@ export default function UserManagement() {
     if (!selectedUser) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = getToken();
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch(`/api/users/${selectedUser.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify(formData)
       });
 
@@ -154,13 +157,12 @@ export default function UserManagement() {
     if (!confirm(`Are you sure you want to ${action} this user?`)) return;
 
     try {
-      const token = localStorage.getItem('auth_token');
+      const token = getToken();
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch(`/api/users/${userId}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           is_active: !currentStatus
         })
@@ -232,13 +234,12 @@ export default function UserManagement() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
+      const headers: HeadersInit = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
       const response = await fetch(`/api/users/${selectedUser.id}/change-password`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({
           new_password: changePasswordData.new_password
         })
@@ -486,7 +487,7 @@ export default function UserManagement() {
                 required
               >
                 {userTypes.map((type) => (
-                  <option key={type.user_type_id} value={type.user_type_id} className="bg-slate-800">
+                  <option key={type.user_type_id} value={type.user_type_id} className="bg-white text-gray-900">
                     {type.user_type_name.charAt(0).toUpperCase() + type.user_type_name.slice(1)}
                   </option>
                 ))}
@@ -565,7 +566,7 @@ export default function UserManagement() {
                 required
               >
                 {userTypes.map((type) => (
-                  <option key={type.user_type_id} value={type.user_type_id} className="bg-slate-800">
+                  <option key={type.user_type_id} value={type.user_type_id} className="bg-white text-gray-900">
                     {type.user_type_name.charAt(0).toUpperCase() + type.user_type_name.slice(1)}
                   </option>
                 ))}

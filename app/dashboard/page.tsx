@@ -23,6 +23,83 @@ import Sidebar from '@/components/Sidebar';
 import { CurrencyProvider } from '@/context/CurrencyContext';
 import SystemSettings from '@/components/SystemSettings';
 
+function UserMenu({
+  user,
+  onLogout,
+  onOpenProfile,
+  onOpenPassword
+}: {
+  user: User;
+  onLogout: () => void;
+  onOpenProfile: () => void;
+  onOpenPassword: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const fullName = `${user.first_name} ${user.last_name}`;
+  const userType = user.user_type_name || 'User';
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex items-center space-x-3 px-3 py-2 rounded-full border border-gray-200 hover:border-green-500 bg-white shadow-sm transition"
+      >
+        <div className="text-right">
+          <p className="text-sm font-semibold text-gray-900">{fullName}</p>
+          <p className="text-xs text-gray-500">{userType}</p>
+        </div>
+        <div className="flex items-center space-x-2">
+          <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-semibold">
+            {user.first_name?.charAt(0)?.toUpperCase() || 'U'}
+          </div>
+          <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50">
+          <div className="px-4 py-3 border-b border-gray-100">
+            <p className="text-sm font-semibold text-gray-900">{fullName}</p>
+            <p className="text-xs text-gray-500">{user.email}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onOpenProfile();
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Profile
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onOpenPassword();
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+          >
+            Change Password
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onLogout();
+            }}
+            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 border-t border-gray-100"
+          >
+            Logout
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -30,6 +107,21 @@ export default function Dashboard() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(() => searchParams.get('tab') || 'dashboard');
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone_number: ''
+  });
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if user is authenticated
@@ -44,6 +136,12 @@ export default function Dashboard() {
     try {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
+      setProfileForm({
+        first_name: parsedUser.first_name || '',
+        last_name: parsedUser.last_name || '',
+        email: parsedUser.email || '',
+        phone_number: parsedUser.phone_number || parsedUser.phone || ''
+      });
     } catch (error) {
       console.error('Error parsing user data:', error);
       router.push('/login');
@@ -73,7 +171,61 @@ export default function Dashboard() {
   const handleLogout = () => {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
+    document.cookie = 'auth_token=; Max-Age=0; path=/; SameSite=Lax';
     router.push('/login');
+  };
+
+  const handleProfileSave = async () => {
+    if (!user) return;
+    setProfileMessage(null);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileForm)
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setProfileMessage(data.message || 'Failed to update profile');
+        return;
+      }
+      const updatedUser = { ...user, ...profileForm };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setProfileMessage('Profile updated');
+      setShowProfileModal(false);
+    } catch (err) {
+      setProfileMessage('Failed to update profile');
+    }
+  };
+
+  const handlePasswordSave = async () => {
+    if (!user) return;
+    setPasswordMessage(null);
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      setPasswordMessage('Passwords do not match');
+      return;
+    }
+    try {
+      const res = await fetch(`/api/users/${user.id}/change-password`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          current_password: passwordForm.current_password,
+          new_password: passwordForm.new_password
+        })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setPasswordMessage(data.message || 'Failed to change password');
+        return;
+      }
+      setPasswordMessage('Password changed successfully');
+      setPasswordForm({ current_password: '', new_password: '', confirm_password: '' });
+      setShowPasswordModal(false);
+    } catch (err) {
+      setPasswordMessage('Failed to change password');
+    }
   };
 
   if (isLoading) {
@@ -106,37 +258,19 @@ export default function Dashboard() {
         <header className="bg-white shadow-sm border-b border-gray-200">
           <div className="flex justify-between items-center h-16 px-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 capitalize">
+              { /*<h1 className="text-2xl font-bold text-gray-900 capitalize">
                 {activeTab.replace('-', ' ')}
               </h1>
               <p className="text-sm text-gray-600">
                 Veterinary Hospital Management System
-              </p>
+              </p> */ }
             </div>
-            <div className="flex items-center space-x-4">
-              <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5-5-5h5v-5a7.5 7.5 0 00-15 0v5h5l-5 5-5-5h5v-5a7.5 7.5 0 0115 0v5z" />
-                </svg>
-              </button>
-              <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5-5-5h5v-5a7.5 7.5 0 00-15 0v5h5l-5 5-5-5h5v-5a7.5 7.5 0 0115 0v5z" />
-                </svg>
-              </button>
-              <div className="flex items-center space-x-3">
-                <div className="text-right">
-                  <p className="text-sm font-medium text-gray-900">Dr. {user.first_name} {user.last_name}</p>
-                  <p className="text-xs text-gray-500">{user.email}</p>
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg text-sm transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
-            </div>
+            <UserMenu
+              user={user}
+              onLogout={handleLogout}
+              onOpenProfile={() => setShowProfileModal(true)}
+              onOpenPassword={() => setShowPasswordModal(true)}
+            />
           </div>
         </header>
 
@@ -446,6 +580,176 @@ export default function Dashboard() {
         </main>
       </div>
     </div>
+    {showProfileModal && (
+      <ProfileModal
+        form={profileForm}
+        message={profileMessage}
+        onClose={() => setShowProfileModal(false)}
+        onSave={handleProfileSave}
+        onChange={(field, value) =>
+          setProfileForm((prev) => ({
+            ...prev,
+            [field]: value
+          }))
+        }
+      />
+    )}
+    {showPasswordModal && (
+      <PasswordModal
+        form={passwordForm}
+        message={passwordMessage}
+        onClose={() => setShowPasswordModal(false)}
+        onSave={handlePasswordSave}
+        onChange={(field, value) =>
+          setPasswordForm((prev) => ({
+            ...prev,
+            [field]: value
+          }))
+        }
+      />
+    )}
     </CurrencyProvider>
+  );
+}
+
+function ProfileModal({
+  form,
+  onChange,
+  onClose,
+  onSave,
+  message
+}: {
+  form: { first_name: string; last_name: string; email: string; phone_number: string };
+  onChange: (field: keyof typeof form, value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  message: string | null;
+}) {
+  return (
+    <Modal onClose={onClose}>
+      <div className="p-6 space-y-4">
+        <h3 className="text-xl font-bold text-gray-900">Edit Profile</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <input
+            type="text"
+            value={form.first_name}
+            onChange={(e) => onChange('first_name', e.target.value)}
+            placeholder="First Name"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          <input
+            type="text"
+            value={form.last_name}
+            onChange={(e) => onChange('last_name', e.target.value)}
+            placeholder="Last Name"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+        </div>
+        <input
+          type="email"
+          value={form.email}
+          onChange={(e) => onChange('email', e.target.value)}
+          placeholder="Email"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+        <input
+          type="tel"
+          value={form.phone_number}
+          onChange={(e) => onChange('phone_number', e.target.value)}
+          placeholder="Phone Number"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+        {message && <p className="text-sm text-red-600">{message}</p>}
+        <div className="flex justify-end space-x-3 pt-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            Update Profile
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PasswordModal({
+  form,
+  onChange,
+  onClose,
+  onSave,
+  message
+}: {
+  form: { current_password: string; new_password: string; confirm_password: string };
+  onChange: (field: keyof typeof form, value: string) => void;
+  onClose: () => void;
+  onSave: () => void;
+  message: string | null;
+}) {
+  return (
+    <Modal onClose={onClose}>
+      <div className="p-6 space-y-4">
+        <h3 className="text-xl font-bold text-gray-900">Change Password</h3>
+        <input
+          type="password"
+          value={form.current_password}
+          onChange={(e) => onChange('current_password', e.target.value)}
+          placeholder="Current Password"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+        <input
+          type="password"
+          value={form.new_password}
+          onChange={(e) => onChange('new_password', e.target.value)}
+          placeholder="New Password"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+        <input
+          type="password"
+          value={form.confirm_password}
+          onChange={(e) => onChange('confirm_password', e.target.value)}
+          placeholder="Confirm New Password"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+        />
+        {message && <p className="text-sm text-red-600">{message}</p>}
+        <div className="flex justify-end space-x-3 pt-2">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onSave}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+          >
+            Update Password
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+function Modal({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg relative">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        {children}
+      </div>
+    </div>
   );
 }

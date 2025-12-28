@@ -43,6 +43,8 @@ export default function LoginForm({ onSuccess, onError }: LoginFormProps) {
       if (result.success && result.token) {
         localStorage.setItem('auth_token', result.token);
         localStorage.setItem('user', JSON.stringify(result.user));
+        // Keep an auth cookie so API routes can read it if headers are missing
+        document.cookie = `auth_token=${result.token}; path=/; SameSite=Lax`;
         onSuccess?.(result);
       } else {
         setError(result.message);

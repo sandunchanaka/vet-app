@@ -1,46 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { pool } from '../../../lib/db';
-import { verifyToken } from '../../../lib/auth';
+import pool from '@/lib/database';
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (decoded.user_type !== 1) {
-      return NextResponse.json({ success: false, message: 'Access denied. Admin privileges required.' }, { status: 403 });
-    }
-
     const userId = params.id;
     const body = await request.json();
-    const { new_password } = body;
+    const { current_password, new_password } = body;
 
     // Basic validation
-    if (!new_password || new_password.length < 6) {
+    if (!current_password || !new_password || new_password.length < 6) {
       return NextResponse.json({ 
         success: false, 
-        message: 'Password must be at least 6 characters long' 
+        message: 'Current password and a new password of at least 6 characters are required' 
       }, { status: 400 });
     }
 
-    // Hash the new password
+    // Get existing password hash
+    const [users] = await pool.execute('SELECT password_hash FROM users WHERE id = ?', [userId]);
+    if (!Array.isArray(users) || users.length === 0) {
+      return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
+    }
+
     const bcrypt = require('bcryptjs');
+    const currentHash = (users as any)[0].password_hash;
+    const isCurrentValid = await bcrypt.compare(current_password, currentHash || '');
+    if (!isCurrentValid) {
+      return NextResponse.json({ success: false, message: 'Current password is incorrect' }, { status: 400 });
+    }
+
     const hashedPassword = await bcrypt.hash(new_password, 10);
 
-    // Update password
+    // Update password_hash (matches login schema)
     await pool.execute(
-      'UPDATE users SET password = ?, updated_user = ? WHERE id = ?',
-      [hashedPassword, decoded.id, userId]
+      'UPDATE users SET password_hash = ?, updated_user = ? WHERE id = ?',
+      [hashedPassword, null, userId]
     );
 
     return NextResponse.json({
@@ -56,4 +49,3 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }, { status: 500 });
   }
 }
-
