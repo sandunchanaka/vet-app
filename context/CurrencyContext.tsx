@@ -14,18 +14,24 @@ interface CurrencyContextValue {
 const CurrencyContext = createContext<CurrencyContextValue | undefined>(undefined);
 
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
-  const [currency, setCurrency] = useState<CurrencyCode>('USD');
-
-  useEffect(() => {
+  const [currency, setCurrencyState] = useState<CurrencyCode>(() => {
+    if (typeof window === 'undefined') return 'USD';
     const stored = localStorage.getItem('system_currency') as CurrencyCode | null;
-    if (stored === 'USD' || stored === 'LKR') {
-      setCurrency(stored);
-    }
-  }, []);
+    return stored === 'USD' || stored === 'LKR' ? stored : 'USD';
+  });
 
   useEffect(() => {
-    localStorage.setItem('system_currency', currency);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('system_currency', currency);
+    }
   }, [currency]);
+
+  const setCurrency = (next: CurrencyCode) => {
+    setCurrencyState(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('system_currency', next);
+    }
+  };
 
   const currencySymbol = currency === 'LKR' ? 'Rs' : '$';
 

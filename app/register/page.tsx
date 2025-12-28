@@ -21,6 +21,7 @@ export default function RegisterPage() {
       // Store token and user data
       localStorage.setItem('auth_token', response.token);
       localStorage.setItem('user', JSON.stringify(response.user));
+      document.cookie = `auth_token=${response.token}; path=/; SameSite=Lax`;
       
       // Redirect to dashboard
       router.push('/dashboard');

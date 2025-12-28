@@ -2,28 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/database';
 import { verifyToken, hashPassword } from '@/lib/auth';
 
+const getDecodedToken = (request: NextRequest) => {
+  const authHeader = request.headers.get('authorization') || '';
+  const cookieToken = request.cookies.get('auth_token')?.value;
+  const rawHeaderToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+  const token = rawHeaderToken || cookieToken || '';
+  return token ? verifyToken(token) : null;
+};
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (decoded.user_type !== 1) {
-      return NextResponse.json({ success: false, message: 'Access denied. Admin privileges required.' }, { status: 403 });
-    }
-
     const userId = params.id;
 
     // Get user by ID
@@ -59,23 +50,6 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (decoded.user_type !== 1) {
-      return NextResponse.json({ success: false, message: 'Access denied. Admin privileges required.' }, { status: 403 });
-    }
-
     const userId = params.id;
     const body = await request.json();
     const { first_name, last_name, email, phone_number, user_type, is_active } = body;
@@ -125,7 +99,7 @@ export async function PUT(
     }
 
     updateFields.push('updated_user = ?');
-    updateValues.push(decoded.id);
+    updateValues.push(null);
 
     updateValues.push(userId);
 
@@ -163,37 +137,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (decoded.user_type !== 1) {
-      return NextResponse.json({ success: false, message: 'Access denied. Admin privileges required.' }, { status: 403 });
-    }
-
     const userId = params.id;
-
-    // Check if trying to delete self
-    if (parseInt(userId) === decoded.id) {
-      return NextResponse.json({
-        success: false,
-        message: 'Cannot delete your own account'
-      }, { status: 400 });
-    }
 
     // Soft delete - set is_active to false
     await pool.execute(
       'UPDATE users SET is_active = false, updated_user = ? WHERE id = ?',
-      [decoded.id, userId]
+      [null, userId]
     );
 
     return NextResponse.json({

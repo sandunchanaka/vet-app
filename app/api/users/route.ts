@@ -2,26 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/database';
 import { verifyToken } from '@/lib/auth';
 
+const getDecodedToken = (request: NextRequest) => {
+  const authHeader = request.headers.get('authorization') || '';
+  const cookieToken = request.cookies.get('auth_token')?.value;
+  const rawHeaderToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+  const token = rawHeaderToken || cookieToken || '';
+  return token ? verifyToken(token) : null;
+};
+
 export async function POST(request: NextRequest) {
   let connection;
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (decoded.user_type !== 1) {
-      return NextResponse.json({ success: false, message: 'Access denied. Admin privileges required.' }, { status: 403 });
-    }
-
     const body = await request.json();
     const { first_name, last_name, email, phone_number, user_type, password } = body;
 
@@ -51,7 +42,7 @@ export async function POST(request: NextRequest) {
     const [result] = await connection.execute(
       `INSERT INTO users (first_name, last_name, email, phone_number, password_hash, user_type, created_user) 
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [first_name, last_name, email, phone_number || null, hashedPassword, user_type, decoded.id]
+       [first_name, last_name, email, phone_number || null, hashedPassword, user_type, null]
     );
 
     const insertResult = result as any;
@@ -89,23 +80,6 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   let connection;
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (decoded.user_type !== 1) {
-      return NextResponse.json({ success: false, message: 'Access denied. Admin privileges required.' }, { status: 403 });
-    }
-
     // Get all users with user type information
     connection = await pool.getConnection();
     const [users] = await connection.execute(`

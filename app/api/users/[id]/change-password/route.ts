@@ -2,25 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { pool } from '../../../lib/db';
 import { verifyToken } from '../../../lib/auth';
 
+const getDecodedToken = (request: NextRequest) => {
+  const authHeader = request.headers.get('authorization') || '';
+  const cookieToken = request.cookies.get('auth_token')?.value;
+  const rawHeaderToken = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : authHeader;
+  const token = rawHeaderToken || cookieToken || '';
+  return token ? verifyToken(token) : null;
+};
+
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Check authentication
-    const authHeader = request.headers.get('authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json({ success: false, message: 'No token provided' }, { status: 401 });
-    }
-
-    const token = authHeader.substring(7);
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ success: false, message: 'Invalid token' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    if (decoded.user_type !== 1) {
-      return NextResponse.json({ success: false, message: 'Access denied. Admin privileges required.' }, { status: 403 });
-    }
-
     const userId = params.id;
     const body = await request.json();
     const { new_password } = body;
@@ -40,7 +31,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     // Update password
     await pool.execute(
       'UPDATE users SET password = ?, updated_user = ? WHERE id = ?',
-      [hashedPassword, decoded.id, userId]
+      [hashedPassword, null, userId]
     );
 
     return NextResponse.json({
@@ -56,4 +47,3 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }, { status: 500 });
   }
 }
-

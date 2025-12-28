@@ -1,19 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCurrency } from '@/context/CurrencyContext';
 
 interface VaccineRow {
   vaccine_id?: number | string;
   vaccine_name: string;
-  vaccination_entries: number;
-  vaccination_quantity: number;
-  service_entries: number;
+  vaccination_count: number;
+  unit_price: number;
+  total_amount: number;
 }
 
 interface VaccinationReport {
   summary: {
     totalVaccinations: number;
     vaccineTypes: number;
+    totalRevenue: number;
   };
   vaccines: VaccineRow[];
   dateRange: {
@@ -42,6 +44,7 @@ export default function VaccinationSales() {
   const [report, setReport] = useState<VaccinationReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { formatAmount } = useCurrency();
 
   const loadReport = useCallback(
     async (overrides?: { startDate?: string; endDate?: string }) => {
@@ -162,7 +165,7 @@ export default function VaccinationSales() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -185,6 +188,17 @@ export default function VaccinationSales() {
             <p className="text-2xl font-bold text-gray-900">{formatNumber(report?.summary.vaccineTypes || 0)}</p>
           </div>
         </div>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex items-center gap-4">
+          <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-2.21 0-4 1.343-4 3s1.79 3 4 3 4-1.343 4-3-1.79-3-4-3zm0 0V5m0 9v5m4-7h2m-12 0H6" />
+            </svg>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-gray-500 tracking-widest">Total Amount Earned</p>
+            <p className="text-2xl font-bold text-gray-900">{formatAmount(report?.summary.totalRevenue || 0)}</p>
+          </div>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -202,9 +216,9 @@ export default function VaccinationSales() {
             <thead className="bg-gray-50 text-xs font-semibold uppercase text-gray-500 tracking-wider">
               <tr>
                 <th className="px-4 py-3 text-left">Vaccine</th>
-                <th className="px-4 py-3 text-left">Vaccination Entries</th>
-                <th className="px-4 py-3 text-left">Service Entries</th>
-                <th className="px-4 py-3 text-left">Total Sold</th>
+                <th className="px-4 py-3 text-left">Vaccinations Sold</th>
+                <th className="px-4 py-3 text-left">Unit Price</th>
+                <th className="px-4 py-3 text-left">Total Earned</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -213,11 +227,9 @@ export default function VaccinationSales() {
                 return (
                   <tr key={rowKey} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-semibold text-gray-900">{vaccine.vaccine_name}</td>
-                    <td className="px-4 py-3">{formatNumber(vaccine.vaccination_entries || 0)}</td>
-                    <td className="px-4 py-3">{formatNumber(vaccine.service_entries || 0)}</td>
-                    <td className="px-4 py-3 font-semibold text-gray-900">
-                      {formatNumber((vaccine.vaccination_quantity || 0) + (vaccine.service_entries || 0))}
-                    </td>
+                    <td className="px-4 py-3">{formatNumber(vaccine.vaccination_count || 0)}</td>
+                    <td className="px-4 py-3">{formatAmount(vaccine.unit_price || 0)}</td>
+                    <td className="px-4 py-3 font-semibold text-gray-900">{formatAmount(vaccine.total_amount || 0)}</td>
                   </tr>
                 );
               })}
