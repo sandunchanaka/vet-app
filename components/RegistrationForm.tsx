@@ -7,6 +7,11 @@ interface RegistrationFormProps {
   onError?: (error: string) => void;
 }
 
+interface UserType {
+  user_type_id: number;
+  user_type_name: string;
+}
+
 export default function RegistrationForm({ onSuccess, onError }: RegistrationFormProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,25 +19,21 @@ export default function RegistrationForm({ onSuccess, onError }: RegistrationFor
     first_name: '',
     last_name: '',
     email: '',
-    phone: '',
-    business_name: '',
-    website: '',
-    password: '',
-    confirm_password: '',
-    user_type: 4 // Default to student
+    phone_number: '',
+    user_type: 4,
+    password: ''
   });
 
-  const [userTypes, setUserTypes] = useState([]);
+  const [userTypes, setUserTypes] = useState<UserType[]>([]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: name === 'user_type' ? Number(value) : value
     }));
   };
 
-  // Load user types on component mount
   React.useEffect(() => {
     const fetchUserTypes = async () => {
       try {
@@ -41,8 +42,8 @@ export default function RegistrationForm({ onSuccess, onError }: RegistrationFor
         if (result.success) {
           setUserTypes(result.data);
         }
-      } catch (error) {
-        console.error('Error fetching user types:', error);
+      } catch (fetchError) {
+        console.error('Error fetching user types:', fetchError);
       }
     };
     fetchUserTypes();
@@ -53,25 +54,25 @@ export default function RegistrationForm({ onSuccess, onError }: RegistrationFor
     setIsLoading(true);
     setError(null);
 
-    if (formData.password !== formData.confirm_password) {
-      setError("Passwords don't match");
-      setIsLoading(false);
-      return;
-    }
-
     if (formData.password.length < 8) {
-      setError("Password must be at least 8 characters");
+      setError('Password must be at least 8 characters');
       setIsLoading(false);
       return;
     }
 
     try {
+      const payload = {
+        ...formData,
+        phone: formData.phone_number,
+        confirm_password: formData.password
+      };
+
       const response = await fetch('/api/auth/register', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload)
       });
 
       const result = await response.json();
@@ -92,188 +93,138 @@ export default function RegistrationForm({ onSuccess, onError }: RegistrationFor
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-r from-slate-900/80 to-blue-900/80"></div>
-      
-      <div className="relative z-10 w-full max-w-2xl mx-4">
-        <div className="bg-slate-800/95 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-white mb-2">
-              The NetStripes Customer Platform
-            </h1>
-            <p className="text-white/80 text-lg mb-1">
-              Helping you on your journey to digital transformation
-            </p>
-            <p className="text-white/70">
-              Sign up for free and get instant access to our digital solutions
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 py-10 px-4">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-2xl overflow-hidden">
+          <div className="bg-gradient-to-r from-green-600 to-emerald-600 px-8 py-6">
+            <p className="text-sm text-green-50 uppercase tracking-widest font-semibold">Staff Management</p>
+            <h1 className="text-3xl font-bold text-white">Create Staff Account</h1>
+            <p className="text-green-50 mt-2">
+              Use the same details as the dashboard staff onboarding form to create a new team member.
             </p>
           </div>
 
-          {error && (
-            <div className="mb-6 p-4 bg-red-500/20 border border-red-500/30 rounded-lg">
-              <p className="text-red-200 text-sm">{error}</p>
-            </div>
-          )}
+          <div className="p-8">
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+                {error}
+              </div>
+            )}
 
-          <form onSubmit={onSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form onSubmit={onSubmit} className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    First Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    name="first_name"
+                    type="text"
+                    value={formData.first_name}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Enter first name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    Last Name <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    name="last_name"
+                    type="text"
+                    value={formData.last_name}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="Enter last name"
+                    required
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  First Name <span className="text-red-400">*</span>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <input
-                  name="first_name"
-                  type="text"
-                  value={formData.first_name}
+                  name="email"
+                  type="email"
+                  value={formData.email}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                  placeholder="Enter your first name"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="name@clinic.com"
                   required
                 />
               </div>
-              
+
               <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Last Name <span className="text-red-400">*</span>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Phone Number
                 </label>
                 <input
-                  name="last_name"
-                  type="text"
-                  value={formData.last_name}
+                  name="phone_number"
+                  type="tel"
+                  value={formData.phone_number}
                   onChange={handleInputChange}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                  placeholder="Enter your last name"
-                  required
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="e.g. +1 555 123 4567"
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">
-                E-mail Address <span className="text-red-400">*</span>
-              </label>
-              <input
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                placeholder="info@kandoconsult.com.au"
-                required
-              />
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    User Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    name="user_type"
+                    value={formData.user_type}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    required
+                  >
+                    {userTypes.map((type) => (
+                      <option key={type.user_type_id} value={type.user_type_id}>
+                        {type.user_type_name.charAt(0).toUpperCase() + type.user_type_name.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">
-                Phone <span className="text-red-400">*</span>
-              </label>
-              <input
-                name="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                placeholder="Enter your phone number"
-                required
-              />
-            </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-800 mb-2">
+                    Password <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    name="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 rounded-lg border border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="At least 8 characters"
+                    required
+                  />
+                </div>
+              </div>
 
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">
-                Business Name
-              </label>
-              <input
-                name="business_name"
-                type="text"
-                value={formData.business_name}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                placeholder="Enter your business name"
-              />
-            </div>
-
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">
-                Website
-              </label>
-              <input
-                name="website"
-                type="url"
-                value={formData.website}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                placeholder="https://yourwebsite.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">
-                User Type <span className="text-red-400">*</span>
-              </label>
-              <select
-                name="user_type"
-                value={formData.user_type}
-                onChange={handleInputChange}
-                className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white focus:outline-none focus:border-teal-400"
-                required
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-4 px-6 rounded-lg bg-green-600 text-white font-semibold text-lg disabled:opacity-60 disabled:cursor-not-allowed hover:bg-green-700 transition-colors"
               >
-                {userTypes.map((type: any) => (
-                  <option key={type.user_type_id} value={type.user_type_id} className="bg-slate-800">
-                    {type.user_type_name.charAt(0).toUpperCase() + type.user_type_name.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </div>
+                {isLoading ? 'Creating account...' : 'Register Staff Member'}
+              </button>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Password <span className="text-red-400">*</span>
-                </label>
-                <input
-                  name="password"
-                  type="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                  placeholder="••••••••••"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Confirm Password <span className="text-red-400">*</span>
-                </label>
-                <input
-                  name="confirm_password"
-                  type="password"
-                  value={formData.confirm_password}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:border-teal-400"
-                  placeholder="••••••••••"
-                  required
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-4 px-6 rounded-lg bg-gradient-to-r from-teal-500 to-teal-600 text-white font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed hover:from-teal-600 hover:to-teal-700 transition-all"
-            >
-              {isLoading ? 'Registering...' : 'Register'}
-            </button>
-
-            <div className="text-center">
-              <p className="text-white/70">
-                Already have an account?{' '}
-                <a href="/" className="text-teal-400 hover:text-teal-300 transition-colors font-medium">
-                  Login
+              <p className="text-center text-gray-600">
+                Already have access?{' '}
+                <a href="/" className="text-green-700 font-semibold hover:underline">
+                  Return to login
                 </a>
               </p>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </div>

@@ -10,7 +10,8 @@
     "setup": "node setup.js",
     "setup-db": "node scripts/setup-database.js",
     "test-db": "node scripts/test-database.js",
-    "migrate-db": "node scripts/migrate-database.js"
+    "migrate-db": "node scripts/migrate-database.js",
+     "prod": "npm run build && npm run start"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
