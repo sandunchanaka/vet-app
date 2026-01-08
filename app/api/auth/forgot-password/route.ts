@@ -3,8 +3,8 @@ import jwt from 'jsonwebtoken';
 import nodemailer from 'nodemailer';
 import pool from '@/lib/database';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
-const RESET_TOKEN_EXPIRY = process.env.PASSWORD_RESET_TOKEN_TTL || '30m';
+const JWT_SECRET: string = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
+const RESET_TOKEN_EXPIRY: string = process.env.PASSWORD_RESET_TOKEN_TTL || '30m';
 
 function buildResetUrl(request: NextRequest, token: string) {
   const hostOverride = process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL;
